@@ -1,0 +1,47 @@
+{
+  "name": "@platforma-open/milaboratories.import-gex-data",
+  "version": "1.0.0",
+  "scripts": {
+    "pretty": "prettier --write \"./**/*.{js,jsx,mjs,cjs,ts,tsx,json,vue}\"",
+    "build": "rm -rf ./block-pack && block-tools pack",
+    "mark-stable": "block-tools mark-stable -r 's3://milab-euce1-prod-pkgs-s3-block-registry/pub/releases/?region=eu-central-1'",
+    "prepublishOnly": "block-tools pack && block-tools publish -r 's3://milab-euce1-prod-pkgs-s3-block-registry/pub/releases/?region=eu-central-1'",
+    "do-pack": "rm -f *.tgz && block-tools pack && pnpm pack && mv *.tgz package.tgz"
+  },
+  "files": [
+    "index.d.ts",
+    "index.js"
+  ],
+  "dependencies": {
+    "@platforma-sdk/model": "catalog:",
+    "@platforma-open/milaboratories.import-gex-data.workflow": "workspace:*",
+    "@platforma-open/milaboratories.import-gex-data.model": "workspace:*",
+    "@platforma-open/milaboratories.import-gex-data.ui": "workspace:*"
+  },
+  "block": {
+    "components": {
+      "workflow": "@platforma-open/milaboratories.import-gex-data.workflow/dist/tengo/tpl/main.plj.gz",
+      "model": "@platforma-open/milaboratories.import-gex-data.model/dist/model.json",
+      "ui": "@platforma-open/milaboratories.import-gex-data.ui/dist"
+    },
+    "meta": {
+      "title": "Block Title",
+      "logo": "file:../logos/block-logo.png",
+      "url": "https://github.com/platforma-open/milaboratories.import-gex-data",
+      "support": "mailto:support@milaboratories.com",
+      "description": "Simple Hello World block that can be used as a boilerplate for newly created blocks.",
+      "longDescription": "file:../docs/description.md",
+      "changelog": "file:../CHANGELOG.md",
+      "tags": ["tutorial"],
+      "organization": {
+        "name": "MiLaboratories Inc",
+        "url": "https://milaboratories.com/",
+        "logo": "file:../logos/organization-logo.png"
+      }
+    }
+  },
+  "devDependencies": {
+    "@platforma-sdk/block-tools": "catalog:"
+  },
+  "packageManager": "pnpm@9.12.0"
+}

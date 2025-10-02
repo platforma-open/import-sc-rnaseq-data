@@ -1,0 +1,24 @@
+{
+  "name": "@platforma-open/milaboratories.import-gex-data.ui",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "watch": "vue-tsc && vite build --watch",
+    "build": "vue-tsc -b && vite build",
+    "lint": "eslint .",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@platforma-open/milaboratories.import-gex-data.model": "workspace:*",
+    "@platforma-sdk/ui-vue": "catalog:",
+    "vue": "catalog:"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "catalog:",
+    "typescript": "catalog:",
+    "vite": "catalog:",
+    "vue-tsc": "catalog:",
+    "@platforma-sdk/eslint-config": "catalog:"
+  }
+}

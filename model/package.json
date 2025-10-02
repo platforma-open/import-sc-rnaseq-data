@@ -1,0 +1,23 @@
+{
+  "name": "@platforma-open/milaboratories.import-gex-data.model",
+  "version": "1.0.0",
+  "description": "Block model",
+  "type": "module",
+  "main": "dist/index.cjs",
+  "module": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "vite build && BUILD_UMD=true vite build && block-tools build-model",
+    "lint": "eslint ."
+  },
+  "dependencies": {
+    "@platforma-sdk/model": "catalog:"
+  },
+  "devDependencies": {
+    "@platforma-sdk/block-tools": "catalog:",
+    "typescript": "catalog:",
+    "vite": "catalog:",
+    "vite-plugin-dts": "catalog:",
+    "@platforma-sdk/eslint-config": "catalog:"
+  }
+}
