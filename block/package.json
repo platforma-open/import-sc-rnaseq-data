@@ -1,5 +1,5 @@
 {
-  "name": "@platforma-open/milaboratories.import-gex-data",
+  "name": "@platforma-open/milaboratories.import-sc-rnaseq-data",
   "version": "1.0.0",
   "scripts": {
     "pretty": "prettier --write \"./**/*.{js,jsx,mjs,cjs,ts,tsx,json,vue}\"",
@@ -14,22 +14,22 @@
   ],
   "dependencies": {
     "@platforma-sdk/model": "catalog:",
-    "@platforma-open/milaboratories.import-gex-data.workflow": "workspace:*",
-    "@platforma-open/milaboratories.import-gex-data.model": "workspace:*",
-    "@platforma-open/milaboratories.import-gex-data.ui": "workspace:*"
+    "@platforma-open/milaboratories.import-sc-rnaseq-data.workflow": "workspace:*",
+    "@platforma-open/milaboratories.import-sc-rnaseq-data.model": "workspace:*",
+    "@platforma-open/milaboratories.import-sc-rnaseq-data.ui": "workspace:*"
   },
   "block": {
     "components": {
-      "workflow": "@platforma-open/milaboratories.import-gex-data.workflow/dist/tengo/tpl/main.plj.gz",
-      "model": "@platforma-open/milaboratories.import-gex-data.model/dist/model.json",
-      "ui": "@platforma-open/milaboratories.import-gex-data.ui/dist"
+      "workflow": "@platforma-open/milaboratories.import-sc-rnaseq-data.workflow/dist/tengo/tpl/main.plj.gz",
+      "model": "@platforma-open/milaboratories.import-sc-rnaseq-data.model/dist/model.json",
+      "ui": "@platforma-open/milaboratories.import-sc-rnaseq-data.ui/dist"
     },
     "meta": {
-      "title": "Import GEX Data",
+      "title": "Import scRNA-seq Data",
       "logo": "file:../logos/block-logo.png",
-      "url": "https://github.com/platforma-open/milaboratories.import-gex-data",
+      "url": "https://github.com/platforma-open/milaboratories.import-sc-rnaseq-data",
       "support": "mailto:support@milaboratories.com",
-      "description": "Simple Hello World block that can be used as a boilerplate for newly created blocks.",
+      "description": "Imports count matrices from CSV/TSV files for downstream scRNA-seq analysis.",
       "longDescription": "file:../docs/description.md",
       "changelog": "file:../CHANGELOG.md",
       "tags": [

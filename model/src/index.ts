@@ -1,5 +1,6 @@
-import type { InferOutputsType, PlDataTableStateV2, PlRef } from '@platforma-sdk/model';
-import { BlockModel, createPlDataTableStateV2, isPColumnSpec } from '@platforma-sdk/model';
+import type { InferOutputsType, PColumnIdAndSpec, PlDataTableStateV2, PlRef } from '@platforma-sdk/model';
+import { BlockModel, createPlDataTableStateV2, isPColumn, isPColumnSpec } from '@platforma-sdk/model';
+import type { GraphMakerState } from '@milaboratories/graph-maker';
 
 export type BlockArgs = {
   datasetRef?: PlRef;
@@ -10,6 +11,7 @@ export type UiState = {
   tableState: PlDataTableStateV2;
   title: string;
   settingsOpen: boolean;
+  graphState: GraphMakerState;
 };
 
 export const model = BlockModel.create()
@@ -20,6 +22,15 @@ export const model = BlockModel.create()
     tableState: createPlDataTableStateV2(),
     title: 'Import GEX Data',
     settingsOpen: true,
+    graphState: {
+      template: 'violin',
+      title: 'Cell QC metrics',
+      // layersSettings: {
+      //   violin: {
+      //     fillColor: '#99E099',
+      //   },
+      // },
+    },
   })
 
   .argsValid((ctx) => {
@@ -46,9 +57,58 @@ export const model = BlockModel.create()
     );
   })
 
-  .sections((_ctx) => [{ type: 'link', href: '/', label: 'Main' }])
+  .output('cellMetricsPf', (wf) => {
+    const pCols = wf.outputs?.resolve('cellMetricsPf')?.getPColumns();
+    if (pCols === undefined) return undefined;
 
-  .title((ctx) => ctx.uiState.title)
+    const upstream = wf.resultPool
+      .getData()
+      .entries.map((v) => v.obj)
+      .filter(isPColumn)
+      .filter((col) => col.spec.name === 'pl7.app/label');
+
+    return wf.createPFrame([...pCols, ...upstream]);
+  })
+
+  .output('cellMetricsPfDefaults', (wf) => {
+    let pCols = wf.outputs?.resolve('cellMetricsPf')?.getPColumns();
+    if (pCols === undefined) return undefined;
+
+    // Add sample labels
+    const upstream = wf.resultPool
+      .getData()
+      .entries.map((v) => v.obj)
+      .filter(isPColumn)
+      .filter((col) => col.spec.name === 'pl7.app/label');
+
+    pCols = [...pCols, ...upstream];
+    return pCols.map(
+      (c) =>
+        ({
+          columnId: c.id,
+          spec: c.spec,
+        } satisfies PColumnIdAndSpec),
+    );
+  })
+
+  .output('cellMetricsSpec', (wf) => {
+    const pCols = wf.outputs?.resolve('cellMetricsPf')?.getPColumns();
+    if (pCols === undefined) return undefined;
+    return pCols[0].spec;
+  })
+
+  .output('isRunning', (ctx) => ctx.outputs?.getIsReadyOrError() === false)
+
+  .sections([
+    { type: 'link', href: '/', label: 'Main' },
+    { type: 'link', href: '/CellQC', label: 'Cell QC' },
+  ])
+
+  .title((ctx) =>
+    ctx.uiState.title
+      ? `Import scRNA-seq Data - ${ctx.uiState.title}`
+      : 'Import scRNA-seq Data',
+  )
 
   .done(2);
 

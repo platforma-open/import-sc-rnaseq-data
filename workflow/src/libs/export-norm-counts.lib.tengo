@@ -1,0 +1,53 @@
+ll := import("@platforma-sdk/workflow-tengo:ll")
+json := import("json")
+
+getSpecs := func(blockId, species, sampleAxis) {
+	// Add dense annotation to sample axis
+	sampleAxis.annotations["pl7.app/graph/isDenseAxis"] = "true"
+	
+    specs := {
+				kind: "PColumn",
+				name: "pl7.app/rna-seq/countMatrix",
+				domain: {
+					"pl7.app/blockId": blockId,
+					"pl7.app/species": species,
+					"pl7.app/rna-seq/normalized": "true"
+				},
+				valueType: "Double",
+				annotations: {
+					"pl7.app/label": "Normalized gene expression",
+					"pl7.app/graph/treatAbsentValuesAs":"0"
+                },
+				axesSpec: [
+					sampleAxis,
+					{
+						"name": "pl7.app/sc/cellId",
+						"type": "String",
+						"annotations": {
+							"pl7.app/label": "Cell ID",
+							"pl7.app/parents": string(json.encode(["pl7.app/sampleId"])),
+							"pl7.app/graph/isDenseAxis":"true",
+							"pl7.app/table/fontFamily": "monospace",
+							"pl7.app/table/orderPriority": "110000",
+							"pl7.app/table/visibility": "default"
+						}
+					},
+					{
+						"name": "pl7.app/rna-seq/geneId",
+						"type": "String",
+						"domain": {
+							"pl7.app/species": species
+						},
+						"annotations": {
+							"pl7.app/label": "Ensembl Id",
+							"pl7.app/graph/axis/highCardinality": "true"
+						}
+					}
+					]
+			}
+    return specs
+}
+
+export ll.toStrict({
+	getSpecs: getSpecs
+})

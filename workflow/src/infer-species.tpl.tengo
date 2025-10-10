@@ -1,0 +1,25 @@
+self := import("@platforma-sdk/workflow-tengo:tpl")
+exec := import("@platforma-sdk/workflow-tengo:exec")
+assets := import("@platforma-sdk/workflow-tengo:assets")
+
+self.defineOutputs("species", "geneFormat")
+
+self.body(func(inputs) {
+	firstSampleData := inputs.inputFile
+
+	inferSpeciesJob := exec.builder().
+		software(assets.importSoftware("@platforma-open/milaboratories.import-sc-rnaseq-data.software:infer-species")).
+		mem("16GiB").
+		cpu(1).
+		addFile("rawCounts.csv", firstSampleData).
+		arg("rawCounts.csv").
+		saveFileContent("species.txt").
+		saveFileContent("gene_format.txt").
+		printErrStreamToStdout().
+		run()
+
+	return {
+		species: inferSpeciesJob.getFileContent("species.txt"),
+		geneFormat: inferSpeciesJob.getFileContent("gene_format.txt")
+	}
+})

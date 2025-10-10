@@ -1,0 +1,60 @@
+ll := import("@platforma-sdk/workflow-tengo:ll")
+json := import("json")
+
+getColumns := func(blockId, species) {
+  return {
+    axes: [
+      {
+        "column": "CellId",
+        "spec": {
+					"name": "pl7.app/sc/cellId",
+					"type": "String",
+					"annotations": {
+						"pl7.app/label": "Cell ID",
+						"pl7.app/parents": string(json.encode(["pl7.app/sampleId"])),
+						"pl7.app/table/fontFamily": "monospace",
+						"pl7.app/table/orderPriority": "110000",
+						"pl7.app/table/visibility": "default"
+					}
+				}
+      }, {
+        "column": "GeneId",
+        "spec": {
+						"name": "pl7.app/rna-seq/geneId",
+						"type": "String",
+						"domain": {
+							"pl7.app/species": species
+						},
+						"annotations": {
+							"pl7.app/label": "Ensembl Id",
+              "pl7.app/graph/axis/highCardinality": "true"
+						}
+					}
+      }  
+      ],
+    columns: [{
+        "column": "NormalizedCount",
+        "id": "normCounts",
+        "allowNA": true,
+        "spec": {
+          "name": "pl7.app/rna-seq/countMatrix",
+          "valueType": "Double",
+          "domain": {
+            "pl7.app/blockId": blockId,
+            "pl7.app/species": species,
+            "pl7.app/rna-seq/normalized": "true"
+          },
+          "annotations": {
+            "pl7.app/label": "Normalized gene expression"
+          }
+        }
+      }
+      ],
+    "storageFormat": "Binary",
+    "partitionKeyLength": 0
+  }
+}
+
+export ll.toStrict({
+	getColumns: getColumns
+})

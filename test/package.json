@@ -1,5 +1,5 @@
 {
-  "name": "@platforma-open/milaboratories.import-gex-data.test",
+  "name": "@platforma-open/milaboratories.import-sc-rnaseq-data.test",
   "private": true,
   "version": "1.0.0",
   "description": "Block tests",
@@ -10,7 +10,7 @@
   "files": [],
   "keywords": [],
   "dependencies": {
-    "this-block": "workspace:@platforma-open/milaboratories.import-gex-data@*"
+    "this-block": "workspace:@platforma-open/milaboratories.import-sc-rnaseq-data@*"
   },
   "devDependencies": {
     "@platforma-sdk/test": "catalog:",

@@ -1,0 +1,86 @@
+self := import("@platforma-sdk/workflow-tengo:tpl")
+
+json := import("json")
+path := import("@platforma-sdk/workflow-tengo:path")
+
+ll := import("@platforma-sdk/workflow-tengo:ll")
+exec := import("@platforma-sdk/workflow-tengo:exec")
+file := import("@platforma-sdk/workflow-tengo:file")
+assets := import("@platforma-sdk/workflow-tengo:assets")
+maps := import("@platforma-sdk/workflow-tengo:maps")
+pConstants := import("@platforma-sdk/workflow-tengo:pframes.constants")
+
+
+self.defineOutputs(
+	"rawCountsCsv",
+	"normCountsCsv",
+	"cellMetricsCsv"
+)
+
+self.body(func(inputs) {
+	inputData := inputs[pConstants.VALUE_FIELD_NAME]
+	species := inputs.species
+	fileExtension := inputs.fileExtension
+	geneFormat := inputs.geneFormat
+
+	mem := !is_undefined(inputs.mem) ? string(inputs.mem) + "GiB" : "64GB"
+	cpu := !is_undefined(inputs.cpu) ? inputs.cpu : 16
+
+	// Script to be modified to accept different input formats, csv or mtx
+	countMatrixCsv := exec.builder().
+		software(assets.importSoftware("@platforma-open/milaboratories.import-sc-rnaseq-data.software:counts-csv")).
+		mem(mem).
+		cpu(cpu).
+		addFile("counts.csv", inputData).
+		arg("counts.csv").
+		saveFile("rawCounts.csv").
+		saveFile("rawCounts_normalized.csv").
+		printErrStreamToStdout().
+		run()
+
+	rawCounts := countMatrixCsv.getFile("rawCounts.csv")
+	normCounts := countMatrixCsv.getFile("rawCounts_normalized.csv")
+
+	// Set default memory and CPU for imports
+    defaultConvMem := "16GiB" // @TODO: set based on the size of the input
+    defaultConvCpu := 1 // @TODO: set based on the size of the input
+	
+	// Script to be modified to accept different input formats, csv or mtx
+	cellMetricsCsv := exec.builder().
+		software(assets.importSoftware("@platforma-open/milaboratories.import-sc-rnaseq-data.software:cell-metrics")).
+		mem(mem).
+		cpu(cpu).
+		addFile("rawCounts.csv", rawCounts).
+		arg("rawCounts.csv").
+		arg("--species").arg(species).
+		arg("--output").arg(".").
+		saveFile("cell_metrics.csv").
+		printErrStreamToStdout().
+		run()
+
+	filteredCellsCountsCsv := exec.builder().
+		software(assets.importSoftware("@platforma-open/milaboratories.import-sc-rnaseq-data.software:filter-cells")).
+		mem(mem).
+		cpu(cpu).
+		addFile("rawCounts.csv", rawCounts).
+		addFile("rawCounts_normalized.csv", normCounts).
+		addFile("cell_metrics.csv", cellMetricsCsv.getFile("cell_metrics.csv")).
+		arg("--raw_counts").arg("rawCounts.csv").
+		arg("--normalized_counts").arg("rawCounts_normalized.csv").
+		arg("--metrics").arg("cell_metrics.csv").
+		arg("--output_raw").arg("filtered_rawCounts.csv").
+		arg("--output_normalized").arg("filtered_rawCounts_normalized.csv").
+		saveFile("filtered_rawCounts.csv").
+		saveFile("filtered_rawCounts_normalized.csv").
+		printErrStreamToStdout().
+		run()
+
+	output := {
+		rawCountsCsv: filteredCellsCountsCsv.getFile("filtered_rawCounts.csv"),
+		normCountsCsv: filteredCellsCountsCsv.getFile("filtered_rawCounts_normalized.csv"),
+		cellMetricsCsv: cellMetricsCsv.getFile("cell_metrics.csv")
+	}
+
+	return output
+
+})

@@ -1,5 +1,5 @@
 {
-  "name": "@platforma-open/milaboratories.import-gex-data.workflow",
+  "name": "@platforma-open/milaboratories.import-sc-rnaseq-data.workflow",
   "version": "1.0.0",
   "type": "module",
   "description": "Block Workflow",
@@ -13,6 +13,8 @@
   },
   "devDependencies": {
     "@platforma-sdk/tengo-builder": "catalog:",
+    "@platforma-open/milaboratories.import-sc-rnaseq-data.software": "workspace:*",
+    "@platforma-open/milaboratories.gene-annotations-assets": "catalog:",
     "@platforma-sdk/test": "catalog:",
     "vitest": "catalog:"
   }

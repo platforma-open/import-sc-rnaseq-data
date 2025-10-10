@@ -1,0 +1,59 @@
+assets := import("@platforma-sdk/workflow-tengo:assets")
+ll := import("@platforma-sdk/workflow-tengo:ll")
+
+speciesNamesMap := {
+	"arabidopsis-thaliana": "arabidopsis_thaliana_gene_annotations.csv",
+	"bos-taurus": "bos_taurus_gene_annotations.csv",
+	"caenorhabditis-elegans": "caenorhabditis_elegans_gene_annotations.csv",
+	"danio-rerio": "danio_rerio_gene_annotations.csv",
+	"drosophila-melanogaster": "drosophila_melanogaster_gene_annotations.csv",
+	"gallus-gallus": "gallus_gallus_gene_annotations.csv",
+	"homo-sapiens": "homo_sapiens_gene_annotations.csv",
+	"mus-musculus": "mus_musculus_gene_annotations.csv",
+	"rattus-norvegicus": "rattus_norvegicus_gene_annotations.csv",
+	"saccharomyces-cerevisiae": "saccharomyces_cerevisiae_gene_annotations.csv",
+	"sus-scrofa": "sus_scrofa_gene_annotations.csv"
+}
+
+getAssetName := func(species){
+	name := speciesNamesMap[species]
+
+	if is_undefined(name) {
+		return species
+	} else {
+		return name
+	}
+}
+
+getGeneAsset := func(species) {
+	if species == "arabidopsis-thaliana" {
+		return assets.importAsset("@platforma-open/milaboratories.gene-annotations-assets:arabidopsis-thaliana")
+	} else if species == "bos-taurus" {
+		return assets.importAsset("@platforma-open/milaboratories.gene-annotations-assets:bos-taurus")
+	} else if species == "caenorhabditis-elegans" {
+		return assets.importAsset("@platforma-open/milaboratories.gene-annotations-assets:caenorhabditis-elegans")
+	} else if species == "danio-rerio" {
+		return assets.importAsset("@platforma-open/milaboratories.gene-annotations-assets:danio-rerio")
+	} else if species == "drosophila-melanogaster" {
+		return assets.importAsset("@platforma-open/milaboratories.gene-annotations-assets:drosophila-melanogaster")
+	} else if species == "gallus-gallus" {
+		return assets.importAsset("@platforma-open/milaboratories.gene-annotations-assets:gallus-gallus")
+	} else if species == "homo-sapiens" {
+		return assets.importAsset("@platforma-open/milaboratories.gene-annotations-assets:homo-sapiens")
+	} else if species == "mus-musculus" {
+		return assets.importAsset("@platforma-open/milaboratories.gene-annotations-assets:mus-musculus")
+	} else if species == "rattus-norvegicus" {
+		return assets.importAsset("@platforma-open/milaboratories.gene-annotations-assets:rattus-norvegicus")
+	} else if species == "saccharomyces-cerevisiae" {
+		return assets.importAsset("@platforma-open/milaboratories.gene-annotations-assets:saccharomyces-cerevisiae")
+	} else if species == "sus-scrofa" {
+		return assets.importAsset("@platforma-open/milaboratories.gene-annotations-assets:sus-scrofa")
+	} else {
+		return undefined
+	}
+}
+
+export ll.toStrict({
+	getGeneAsset: getGeneAsset,
+	getAssetName: getAssetName
+})

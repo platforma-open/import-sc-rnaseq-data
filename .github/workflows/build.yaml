@@ -11,7 +11,7 @@ on:
   workflow_dispatch: {}
 jobs:
   init:
-    if: github.repository != 'milaboratory/platforma-import-gex-data'
+    if: github.repository != 'milaboratory/platforma-import-sc-rnaseq-data'
     runs-on: ubuntu-latest
     steps:
       - uses: milaboratory/github-ci/actions/context/init@v4
@@ -19,14 +19,14 @@ jobs:
           version-canonize: false
           branch-versioning: main
   run:
-    if: github.repository != 'milaboratory/platforma-import-gex-data'
+    if: github.repository != 'milaboratory/platforma-import-sc-rnaseq-data'
     needs:
       - init
 
     uses: milaboratory/github-ci/.github/workflows/node-simple-pnpm.yaml@v4
     with:
-      app-name: 'Block: import-gex-data'
-      app-name-slug: 'block-import-gex-data'
+      app-name: 'Block: import-sc-rnaseq-data'
+      app-name-slug: 'block-import-sc-rnaseq-data'
 
       node-version: '20.x'
       build-script-name: 'build'

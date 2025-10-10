@@ -1,0 +1,124 @@
+ll := import("@platforma-sdk/workflow-tengo:ll")
+json := import("json")
+
+getColumns := func(blockId, species) {
+  return {
+    "axes": [
+      {
+        "column": "CellId",
+        "spec": {
+					"name": "pl7.app/sc/cellId",
+					"type": "String",
+					"annotations": {
+						"pl7.app/label": "Cell ID",
+						"pl7.app/parents": string(json.encode(["pl7.app/sampleId"])),
+						"pl7.app/table/fontFamily": "monospace",
+						"pl7.app/table/orderPriority": "110000",
+						"pl7.app/table/visibility": "default"
+					}
+				}
+      }
+      ],
+    "columns": [{
+        "column": "total_counts",
+        "id": "totalCounts",
+        "allowNA": true,
+        "spec": {
+          "name": "pl7.app/rna-seq/totalCounts",
+          "valueType": "Double",
+          "domain": {
+            "pl7.app/blockId": blockId
+          },
+          "annotations": {
+            "pl7.app/label": "Total counts",
+				    "pl7.app/table/hValue": "true"
+          }
+        }
+      },
+      {
+        "column": "n_genes_by_counts",
+        "id": "nGenesByCounts",
+        "allowNA": true,
+        "spec": {
+          "name": "pl7.app/rna-seq/nGenesByCounts",
+          "valueType": "Double",
+          "domain": {
+            "pl7.app/blockId": blockId
+          },
+          "annotations": {
+            "pl7.app/label": "N genes detected",
+				    "pl7.app/table/hValue": "true"
+          }
+        }
+      },
+      {
+        "column": "pct_counts_mt",
+        "id": "pctCountsMt",
+        "allowNA": true,
+        "spec": {
+          "name": "pl7.app/rna-seq/pctCountsMt",
+          "valueType": "Double",
+          "domain": {
+            "pl7.app/blockId": blockId
+          },
+          "annotations": {
+            "pl7.app/label": "Percentage mitochondrial genes",
+            "pl7.app/table/hValue": "true"
+          }
+        }
+      },
+      {
+        "column": "complexity",
+        "id": "complexity",
+        "allowNA": true,
+        "spec": {
+          "name": "pl7.app/rna-seq/complexity",
+          "valueType": "Double",
+          "domain": {
+            "pl7.app/blockId": blockId
+          },
+          "annotations": {
+            "pl7.app/label": "Complexity",
+            "pl7.app/table/hValue": "true"
+          }
+        }
+      },
+      {
+        "column": "pct_counts_in_top_20_genes",
+        "id": "pctCountsInTop20Genes",
+        "allowNA": true,
+        "spec": {
+          "name": "pl7.app/rna-seq/pctCountsInTop20Genes",
+          "valueType": "Double",
+          "domain": {
+            "pl7.app/blockId": blockId
+          },
+          "annotations": {
+            "pl7.app/label": "Percentage counts in top 20 genes",
+            "pl7.app/table/hValue": "true"
+          }
+        }
+      },
+      {
+        "column": "outlier",
+        "id": "outlier",
+        "allowNA": true,
+        "spec": {
+          "name": "pl7.app/rna-seq/cellMetricOutlier",
+          "valueType": "String",
+          "domain": {},
+          "annotations": {
+            "pl7.app/label": "Outlier (MAD)",
+            "pl7.app/table/hValue": "true"
+          }
+        }
+      }
+      ],
+    "storageFormat": "Binary",
+    "partitionKeyLength": 0
+  }
+}
+
+export ll.toStrict({
+	getColumns: getColumns
+})

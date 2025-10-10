@@ -1,5 +1,5 @@
 {
-  "name": "@platforma-open/milaboratories.import-gex-data.ui",
+  "name": "@platforma-open/milaboratories.import-sc-rnaseq-data.ui",
   "version": "1.0.0",
   "type": "module",
   "scripts": {
@@ -10,9 +10,10 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@platforma-open/milaboratories.import-gex-data.model": "workspace:*",
+    "@platforma-open/milaboratories.import-sc-rnaseq-data.model": "workspace:*",
     "@platforma-sdk/ui-vue": "catalog:",
     "@platforma-sdk/model": "catalog:",
+    "@milaboratories/graph-maker": "catalog:",
     "vue": "catalog:"
   },
   "devDependencies": {
