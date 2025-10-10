@@ -12,6 +12,7 @@
   "dependencies": {
     "@platforma-open/milaboratories.import-gex-data.model": "workspace:*",
     "@platforma-sdk/ui-vue": "catalog:",
+    "@platforma-sdk/model": "catalog:",
     "vue": "catalog:"
   },
   "devDependencies": {
