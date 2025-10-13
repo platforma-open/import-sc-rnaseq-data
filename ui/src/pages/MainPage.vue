@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { PlBlockPage, PlBtnGhost, PlDropdownRef, PlMaskIcon24, PlSlideModal } from '@platforma-sdk/ui-vue';
+import { PlAgDataTableV2, PlBlockPage, PlBtnGhost, PlDropdownRef, PlMaskIcon24, PlSlideModal, usePlDataTableSettingsV2 } from '@platforma-sdk/ui-vue';
 import { useApp } from '../app';
 import { plRefsEqual, type PlRef } from '@platforma-sdk/model';
 
@@ -19,6 +19,10 @@ const setDataset = (datasetRef: PlRef | undefined) => {
   if (datasetRef)
     app.model.ui.title = 'Import GEX Data - ' + app.model.outputs.datasetOptions?.find((o) => plRefsEqual(o.ref, datasetRef))?.label;
 };
+
+const tableSettings = usePlDataTableSettingsV2({
+  model: () => app.model.outputs.resultsSummaryPf,
+});
 
 </script>
 
@@ -47,5 +51,6 @@ const setDataset = (datasetRef: PlRef | undefined) => {
         @update:model-value="setDataset"
       />
     </PlSlideModal>
+    <PlAgDataTableV2 v-model="app.model.ui.tableState" :settings="tableSettings" show-export-button />
   </PlBlockPage>
 </template>

@@ -12,10 +12,12 @@ pfSymbolsConv := import(":libs.pf-symbols-conv")
 filteredCountsConv := import(":libs.filtered-counts-conv")
 exportCountsConv := import(":libs.export-counts")
 exportNormCountsConv := import(":libs.export-norm-counts")
+resultsSummaryConv := import(":libs.results-summary-conv")
 
 inferSpeciesTpl := assets.importTemplate(":infer-species")
 importCountsTpl := assets.importTemplate(":import-counts")
 filterGenesTpl := assets.importTemplate(":filter-genes")
+resultsSummaryTpl := assets.importTemplate(":results-summary")
 mapGenesTpl := assets.importTemplate(":map-genes")
 
 self.awaitState("params", "ResourceReady")
@@ -80,6 +82,17 @@ self.body(func(inputs) {
 	normCountCsvParams := filteredCountsConv.getNormColumns(blockId, species, inputSpec)
 	filteredNormCountsPf := xsv.importFile(filteredGenesNormalizedCountsCsv, "csv", normCountCsvParams, { mem: "16GiB", cpu: 1 })
 
+
+	// Summary table
+
+	resultsSummary := render.create(resultsSummaryTpl, {
+		filteredGenesCountsCsv: filteredGenesCountsCsv
+	})
+
+	resultsSummaryCsv := resultsSummary.output("resultsSummaryCsv")
+	resultsSummaryConvParams := resultsSummaryConv.getColumns(blockId, species, inputSpec)
+	resultsSummaryPf := xsv.importFile(resultsSummaryCsv, "csv", resultsSummaryConvParams, { mem: "16GiB", cpu: 1 })
+
 	// // Highly Variable Genes calculation
 	// hvgResults := render.create(hvgTpl, {
 	// 	csvCounts: filteredGenesCountsCsv,
@@ -121,6 +134,7 @@ self.body(func(inputs) {
 	return {
 		exports: exportPfBuilder.build(),
 		cellMetricsPf: cellMetricsPf,
-		rawCountsPf: filteredRawCountsPf
+		rawCountsPf: filteredRawCountsPf,
+		resultsSummaryPf: resultsSummaryPf
 	}
 })

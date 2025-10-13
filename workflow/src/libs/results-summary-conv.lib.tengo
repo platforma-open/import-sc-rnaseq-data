@@ -1,0 +1,135 @@
+ll := import("@platforma-sdk/workflow-tengo:ll")
+json := import("json")
+
+getColumns := func(blockId, species, inputSpec) {
+  return {
+    "axes": [
+      {
+        "column": "sample",
+        "spec": inputSpec.axesSpec[0]
+      }
+      ],
+    "columns": [{
+        "column": "n_cells",
+        "id": "nCells",
+        "allowNA": true,
+        "spec": {
+          "name": "pl7.app/rna-seq/nCells",
+          "valueType": "Double",
+          "domain": {
+            "pl7.app/blockId": blockId
+          },
+          "annotations": {
+            "pl7.app/label": "Number of cells",
+            "pl7.app/table/orderPriority": "80",
+            "pl7.app/description": "Total number of cells detected in this sample"
+          }
+        }
+      },
+      {
+        "column": "n_genes",
+        "id": "nGenes",
+        "allowNA": true,
+        "spec": {
+          "name": "pl7.app/rna-seq/nGenes",
+          "valueType": "Double",
+          "domain": {
+            "pl7.app/blockId": blockId
+          },
+          "annotations": {
+            "pl7.app/label": "N genes detected",
+            "pl7.app/table/orderPriority": "70",
+            "pl7.app/description": "Total number of genes detected across all cells"
+          }
+        }
+      },
+      {
+        "column": "total_umis",
+        "id": "totalUMIs",
+        "allowNA": true,
+        "spec": {
+          "name": "pl7.app/rna-seq/totalUMIs",
+          "valueType": "Double",
+          "domain": {
+            "pl7.app/blockId": blockId
+          },
+          "annotations": {
+            "pl7.app/label": "Total UMI counts",
+            "pl7.app/table/orderPriority": "60",
+            "pl7.app/description": "Sum of all UMI counts in the sample"
+          }
+        }
+      },
+      {
+        "column": "mean_umis_per_cell",
+        "id": "meanUMIsPerCell",
+        "allowNA": true,
+        "spec": {
+          "name": "pl7.app/rna-seq/meanUMIsPerCell",
+          "valueType": "Double",
+          "domain": {
+            "pl7.app/blockId": blockId
+          },
+          "annotations": {
+            "pl7.app/label": "Mean UMI counts per cell",
+            "pl7.app/table/orderPriority": "50",
+            "pl7.app/description": "Average UMI counts per cell"
+          }
+        }
+      },
+      {
+        "column": "median_umis_per_cell",
+        "id": "medianUMIsPerCell",
+        "allowNA": true,
+        "spec": {
+          "name": "pl7.app/rna-seq/medianUMIsPerCell",
+          "valueType": "Double",
+          "domain": {
+            "pl7.app/blockId": blockId
+          },
+          "annotations": {
+            "pl7.app/label": "Median UMI counts per cell",
+            "pl7.app/table/orderPriority": "40",
+            "pl7.app/description": "Median UMI counts per cell"
+          }
+        }
+      },
+      {
+        "column": "mean_genes_per_cell",
+        "id": "meanGenesPerCell",
+        "allowNA": true,
+        "spec": {
+          "name": "pl7.app/rna-seq/meanGenesPerCell",
+          "valueType": "Double",
+          "domain": {},
+          "annotations": {
+            "pl7.app/label": "Mean genes per cell",
+            "pl7.app/table/orderPriority": "30",
+            "pl7.app/description": "Average number of genes detected per cell"
+          }
+        }
+      },
+      {
+        "column": "median_genes_per_cell",
+        "id": "medianGenesPerCell",
+        "allowNA": true,
+        "spec": {
+          "name": "pl7.app/rna-seq/medianGenesPerCell",
+          "valueType": "Double",
+          "domain": {},
+          "annotations": {
+            "pl7.app/label": "Median genes per cell",
+            "pl7.app/table/orderPriority": "20",
+            "pl7.app/description": "Median number of genes detected per cell"
+          }
+        }
+      }
+      ],
+    "storageFormat": "Binary",
+    "partitionKeyLength": 0
+  }
+}
+
+export ll.toStrict({
+	getColumns: getColumns
+})

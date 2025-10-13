@@ -1,10 +1,10 @@
 import type { InferOutputsType, PColumnIdAndSpec, PlDataTableStateV2, PlRef } from '@platforma-sdk/model';
-import { BlockModel, createPlDataTableStateV2, isPColumn, isPColumnSpec } from '@platforma-sdk/model';
+import { BlockModel, createPlDataTableStateV2, createPlDataTableV2, isPColumn, isPColumnSpec } from '@platforma-sdk/model';
 import type { GraphMakerState } from '@milaboratories/graph-maker';
 
 export type BlockArgs = {
   datasetRef?: PlRef;
-  name?: string;
+  // name?: string;
 };
 
 export type UiState = {
@@ -55,6 +55,15 @@ export const model = BlockModel.create()
       );
     },
     );
+  })
+
+  .output('resultsSummaryPf', (ctx) => {
+    const pCols = ctx.outputs?.resolve('resultsSummaryPf')?.getPColumns();
+    if (pCols === undefined) {
+      return undefined;
+    }
+
+    return createPlDataTableV2(ctx, pCols, ctx.uiState.tableState);
   })
 
   .output('cellMetricsPf', (wf) => {

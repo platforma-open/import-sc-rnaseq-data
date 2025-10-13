@@ -34,7 +34,8 @@ wf.body(func(args) {
 	return {
 		outputs: {
 			rawCountsPf: pframes.exportFrame(processRun.output("rawCountsPf")),
-			cellMetricsPf: pframes.exportFrame(processRun.output("cellMetricsPf"))
+			cellMetricsPf: pframes.exportFrame(processRun.output("cellMetricsPf")),
+			resultsSummaryPf: pframes.exportFrame(processRun.output("resultsSummaryPf"))
 		},
 		exports: {
 			exports: processRun.output("exports"),

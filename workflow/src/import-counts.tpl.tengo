@@ -27,9 +27,8 @@ self.body(func(inputs) {
 	fileExtension := inputs.fileExtension
 	geneFormat := inputs.geneFormat
 
-	// We should be only having one sample per process
 	// @TODO: Discover way the key value here is an empty element or a blanc space [ ]
-	// @TODO: We might need to re-write this chunk of data
+	// @TODO: Fix to support multiple files per sample (mtx files)
 	parsedData := pData.parseData(inputData, { expectedKeyLength: 1 })
 	firstKey := maps.getKeys(parsedData.data)[0]
 	uniqueSampleData := parsedData.data[firstKey]
@@ -67,11 +66,11 @@ self.body(func(inputs) {
 			arg("--annotation").arg(geneAssetName)
 		}
 
-	} else if fileFormat == "mtx" {
+	} else if fileFormat == "mtx" { // placeholder
 		countMatrixCsv = countMatrixCsv.
-		addFile("matrix.mtx.gz", inputData). // @TODO: how to add mtx files
-		addFile("barcodes.tsv.gz", inputData). // @TODO: how to add mtx files
-		addFile("features.tsv.gz", inputData). // @TODO: how to add mtx files
+		addFile("matrix.mtx.gz", inputData). // placeholder
+		addFile("barcodes.tsv.gz", inputData). // placeholder
+		addFile("features.tsv.gz", inputData). // placeholder
 		arg("mtx").
 		arg("--matrix").arg("matrix.mtx.gz").
 		arg("--barcodes").arg("barcodes.tsv.gz").
