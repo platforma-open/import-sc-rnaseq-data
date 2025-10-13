@@ -9,6 +9,8 @@ file := import("@platforma-sdk/workflow-tengo:file")
 assets := import("@platforma-sdk/workflow-tengo:assets")
 maps := import("@platforma-sdk/workflow-tengo:maps")
 pConstants := import("@platforma-sdk/workflow-tengo:pframes.constants")
+pData := import("@platforma-sdk/workflow-tengo:pframes.data")
+
 geneMap := import(":libs.gene-map")
 
 
@@ -25,10 +27,17 @@ self.body(func(inputs) {
 	fileExtension := inputs.fileExtension
 	geneFormat := inputs.geneFormat
 
+	// We should be only having one sample per process
+	// @TODO: Discover way the key value here is an empty element or a blanc space [ ]
+	// @TODO: We might need to re-write this chunk of data
+	parsedData := pData.parseData(inputData, { expectedKeyLength: 1 })
+	firstKey := maps.getKeys(parsedData.data)[0]
+	uniqueSampleData := parsedData.data[firstKey]
+
 	fileFormat := ""
-	if fileExtension == ".csv" || fileExtension == ".csv.gz" || fileExtension == ".tsv" || fileExtension == ".tsv.gz" {
+	if fileExtension == "csv" || fileExtension == "csv.gz" || fileExtension == "tsv" || fileExtension == "tsv.gz" {
 		fileFormat = "csv"
-	} else if fileExtension == ".mtx" || fileExtension == ".mtx.gz" {
+	} else if fileExtension == "mtx" || fileExtension == "mtx.gz" {
 		fileFormat = "mtx"
 	}
 
@@ -47,7 +56,7 @@ self.body(func(inputs) {
 
 	if fileFormat == "csv" {
 		countMatrixCsv = countMatrixCsv.
-		addFile("inputCounts.csv", inputData).
+		addFile("inputCounts.csv", uniqueSampleData).
 		arg("csv").arg("--csv").
 		arg("inputCounts.csv").
 		arg("--gene-format").arg(geneFormat)
@@ -67,6 +76,8 @@ self.body(func(inputs) {
 		arg("--matrix").arg("matrix.mtx.gz").
 		arg("--barcodes").arg("barcodes.tsv.gz").
 		arg("--features").arg("features.tsv.gz")
+	} else if fileFormat == "" {
+		ll.panic("ERROR: Unsupported file format: %v", fileExtension)
 	}
 	
 	countMatrixCsv = countMatrixCsv.
