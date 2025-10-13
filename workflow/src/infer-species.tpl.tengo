@@ -1,11 +1,17 @@
 self := import("@platforma-sdk/workflow-tengo:tpl")
 exec := import("@platforma-sdk/workflow-tengo:exec")
 assets := import("@platforma-sdk/workflow-tengo:assets")
+pData := import("@platforma-sdk/workflow-tengo:pframes.data")
+maps := import("@platforma-sdk/workflow-tengo:maps")
 
 self.defineOutputs("species", "geneFormat")
 
 self.body(func(inputs) {
-	firstSampleData := inputs.inputFile
+	inputData := inputs.input
+
+	parsedData := pData.parseData(inputData, { expectedKeyLength: 1 })
+	firstKey := maps.getKeys(parsedData.data)[0]
+	firstSampleData := parsedData.data[firstKey]
 
 	inferSpeciesJob := exec.builder().
 		software(assets.importSoftware("@platforma-open/milaboratories.import-sc-rnaseq-data.software:infer-species")).

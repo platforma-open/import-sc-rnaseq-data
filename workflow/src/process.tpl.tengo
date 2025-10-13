@@ -20,26 +20,18 @@ mapGenesTpl := assets.importTemplate(":map-genes")
 
 self.awaitState("params", "ResourceReady")
 self.awaitState("inputSpec", "ResourceReady")
+self.awaitState("species", "ResourceReady")
+self.awaitState("geneFormat", "ResourceReady")
 
 self.body(func(inputs) {
 	blockId := inputs.params.blockId
+	species := string(inputs.species.getData())
+	geneFormat := string(inputs.geneFormat.getData())
 
 	inputSpec := inputs.inputSpec
 	inputData := inputs.inputData
 
 	fileExtension := inputSpec.domain["pl7.app/fileExtension"]
-
-	// Take the first file from the input to infer species
-	parsedData := pData.parseData(inputData, { expectedKeyLength: 1 })
-	firstKey := maps.getKeys(parsedData.data)[0]
-	firstFile := parsedData.data[firstKey]
-
-	inferSpecies := render.create(inferSpeciesTpl, {
-		inputFile: firstFile
-	})
-
-	species := inferSpecies.output("species")
-	geneFormat := inferSpecies.output("geneFormat")
 
 	importingCountsResults := pframes.processColumn(
 		{ spec: inputSpec, data: inputData }, importCountsTpl,

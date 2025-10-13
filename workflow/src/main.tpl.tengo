@@ -6,15 +6,23 @@ smart := import("@platforma-sdk/workflow-tengo:smart")
 pframes := import("@platforma-sdk/workflow-tengo:pframes")
 
 processTpl := assets.importTemplate(":process")
+inferSpeciesTpl := assets.importTemplate(":infer-species")
 
 wf.body(func(args) {
 
 	input := wf.resolve(args.datasetRef, { errIfMissing: true })
 	blockId := wf.getBlockId()
 
+	// First infer species
+	inferSpeciesRun := render.createEphemeral(inferSpeciesTpl, {
+		input: input.getFutureInputField("data")
+	})
+
 	processRun := render.createEphemeral(processTpl, {
 		inputSpec: input.getFutureInputField("spec"),
 		inputData: input.getFutureInputField("data"),
+		species: inferSpeciesRun.output("species"),
+		geneFormat: inferSpeciesRun.output("geneFormat"),
 
 		params: smart.createJsonResource({
 			blockId: blockId
