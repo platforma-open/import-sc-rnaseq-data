@@ -12,7 +12,8 @@ def clean_barcode_suffix(barcode):
         return barcode.split('-')[0]
     return barcode
 
-def load_data(matrix_path, barcodes_path, features_path):
+def load_data_mtx(matrix_path, barcodes_path, features_path):
+    """Load data from 10X Genomics format files."""
     import scipy.io
 
     # Load the matrix
@@ -62,6 +63,48 @@ def load_data(matrix_path, barcodes_path, features_path):
     adata.obs_names = pd.Index(barcodes, name='cell_id')
     adata.var['gene_symbol'] = features['gene_symbol'].values
 
+    return adata
+
+def load_data_csv(csv_path):
+    """Load data from long format CSV file (output from generate_counts_csv.py)."""
+    print(f"Loading long format CSV: {csv_path}")
+    
+    # Read the CSV file
+    df = pd.read_csv(csv_path)
+    
+    # Validate required columns
+    required_columns = ['CellId', 'GeneId', 'Count']
+    if not all(col in df.columns for col in required_columns):
+        raise ValueError(f"CSV file must contain columns: {required_columns}")
+    
+    print(f"Found {len(df)} entries")
+    print(f"Unique cells: {df['CellId'].nunique()}")
+    print(f"Unique genes: {df['GeneId'].nunique()}")
+    
+    # Check for duplicate CellId-GeneId combinations
+    duplicates = df.duplicated(subset=['CellId', 'GeneId'], keep=False)
+    if duplicates.any():
+        print(f"⚠️ Found {duplicates.sum()} duplicate CellId-GeneId combinations. Keeping maximum counts.")
+        df = df.loc[df.groupby(['CellId', 'GeneId'])['Count'].idxmax()]
+        print(f"After deduplication: {len(df)} entries")
+    
+    # Pivot to create matrix format (cells × genes)
+    print("Converting to matrix format...")
+    matrix_df = df.pivot(index='CellId', columns='GeneId', values='Count').fillna(0)
+    
+    # Convert to sparse matrix for efficiency
+    matrix = scipy.sparse.csr_matrix(matrix_df.values)
+    
+    # Create AnnData object
+    adata = sc.AnnData(matrix)
+    adata.obs_names = pd.Index(matrix_df.index, name='cell_id')
+    adata.var_names = pd.Index(matrix_df.columns, name='gene_id')
+    
+    # For gene symbols, we'll use the gene IDs as symbols (since we don't have separate symbols)
+    adata.var['gene_symbol'] = matrix_df.columns.values
+    
+    print(f"Created AnnData object: {adata.shape[0]} cells × {adata.shape[1]} genes")
+    
     return adata
 
 def calculate_metrics(adata):
@@ -123,16 +166,26 @@ def get_mito_prefix(species):
 
 def main():
     parser = argparse.ArgumentParser(description='Calculate QC metrics for scRNA-seq data.')
-    parser.add_argument('--matrix', type=str, required=True, help='Path to matrix.mtx.gz file')
-    parser.add_argument('--barcodes', type=str, required=True, help='Path to barcodes.tsv.gz file')
-    parser.add_argument('--features', type=str, required=True, help='Path to features.tsv.gz file')
+    parser.add_argument('--format', required=True, choices=['mtx', 'csv'], 
+                       help="Input format: 'mtx' for 10X Genomics format, 'csv' for long format CSV")
+    parser.add_argument('--matrix', help='Path to matrix.mtx.gz file (required for mtx format)')
+    parser.add_argument('--barcodes', help='Path to barcodes.tsv.gz file (required for mtx format)')
+    parser.add_argument('--features', help='Path to features.tsv.gz file (required for mtx format)')
+    parser.add_argument('--csv', help='Path to long format CSV file (required for csv format)')
     parser.add_argument('--species', type=str, required=True, help='Species (e.g., homo-sapiens)')
     parser.add_argument('--output', type=str, required=True, help='Output directory')
 
     args = parser.parse_args()
-
-    # Load data
-    adata = load_data(args.matrix, args.barcodes, args.features)
+    
+    # Load data based on format
+    if args.format == 'mtx':
+        if not all([args.matrix, args.barcodes, args.features]):
+            parser.error("For mtx format, --matrix, --barcodes, and --features are required")
+        adata = load_data_mtx(args.matrix, args.barcodes, args.features)
+    elif args.format == 'csv':
+        if not args.csv:
+            parser.error("For csv format, --csv is required")
+        adata = load_data_csv(args.csv)
 
     # Calculate QC metrics
     calculate_metrics(adata)
