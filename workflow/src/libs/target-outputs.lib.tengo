@@ -1,0 +1,76 @@
+ll := import("@platforma-sdk/workflow-tengo:ll")
+
+pfCountsConv := import(":libs.pf-counts-conv")
+pfNormCountsConv := import(":libs.pf-norm-counts-conv")
+pfMetricsConv := import(":libs.pf-metrics-conv")
+
+getTargetOutputs := func(species, blockId, sampleAxisSpec) {
+	return [
+	// Exporting data to PFrames
+	{
+		type: "Resource",
+		spec: {
+			kind: "PColumn",
+			name: "milaboratories.cell-ranger/files/rawCountsCsv",
+			domain: {
+				"pl7.app/blockId": blockId
+			},
+			valueType: "File"
+		},
+		name: "rawCountsCsv",
+		path: ["rawCountsCsv"]
+	},
+	{
+		type: "Resource",
+		spec: {
+			kind: "PColumn",
+			name: "milaboratories.cell-ranger/files/normCountsCsv",
+			domain: {
+				"pl7.app/blockId": blockId
+			},
+			valueType: "File"
+		},
+		name: "normCountsCsv",
+		path: ["normCountsCsv"]
+	},
+	{
+		type: "Resource",
+		spec: {
+			kind: "PColumn",
+			name: "milaboratories.cell-ranger/files/cellMetricsCsv",
+			domain: {
+				"pl7.app/blockId": blockId
+			},
+			valueType: "File"
+		},
+		name: "cellMetricsCsv",
+		path: ["cellMetricsCsv"]
+	},
+
+	// Raw CSV tables to be stored in the outputs for deduplication
+	{
+		type: "Xsv",
+		xsvType: "csv",
+		settings: pfCountsConv.getColumns(blockId, species),
+		name: "rawCounts",
+		path: ["rawCountsCsv"]
+	},
+	{
+		type: "Xsv",
+		xsvType: "csv",
+		settings: pfNormCountsConv.getColumns(blockId, species),
+		name: "normCounts",
+		path: ["normCountsCsv"]
+	},
+	{
+		type: "Xsv",
+		xsvType: "csv",
+		settings: pfMetricsConv.getColumns(blockId, species),
+		name: "cellMetrics",
+		path: ["cellMetricsCsv"]
+	}]
+}
+
+export ll.toStrict({
+	getTargetOutputs: getTargetOutputs
+})

@@ -1,0 +1,148 @@
+self := import("@platforma-sdk/workflow-tengo:tpl")
+
+json := import("json")
+path := import("@platforma-sdk/workflow-tengo:path")
+
+ll := import("@platforma-sdk/workflow-tengo:ll")
+exec := import("@platforma-sdk/workflow-tengo:exec")
+file := import("@platforma-sdk/workflow-tengo:file")
+assets := import("@platforma-sdk/workflow-tengo:assets")
+maps := import("@platforma-sdk/workflow-tengo:maps")
+pConstants := import("@platforma-sdk/workflow-tengo:pframes.constants")
+pData := import("@platforma-sdk/workflow-tengo:pframes.data")
+
+geneMap := import(":libs.gene-map")
+
+
+
+self.defineOutputs(
+	"rawCountsCsv",
+	"normCountsCsv",
+	"cellMetricsCsv"
+)
+
+self.body(func(inputs) {
+	inputData := inputs[pConstants.VALUE_FIELD_NAME]
+	species := inputs.species
+	fileExtension := inputs.fileExtension
+	geneFormat := inputs.geneFormat
+
+	// @TODO: Discover way the key value here is an empty element or a blanc space [ ]
+	// @TODO: Fix to support multiple files per sample (mtx files)
+	parsedData := pData.parseData(inputData, { expectedKeyLength: 1 })
+	firstKey := maps.getKeys(parsedData.data)[0]
+	uniqueSampleData := parsedData.data[firstKey]
+
+	fileFormat := ""
+	if fileExtension == "csv" || fileExtension == "csv.gz" || fileExtension == "tsv" || fileExtension == "tsv.gz" {
+		fileFormat = "csv"
+	} else if fileExtension == "mtx" || fileExtension == "mtx.gz" {
+		fileFormat = "mtx"
+	}
+
+	geneAsset := geneMap.getGeneAsset(species)
+	geneAssetName := geneMap.getAssetName(species)
+
+	mem := !is_undefined(inputs.mem) ? string(inputs.mem) + "GiB" : "64GB"
+	cpu := !is_undefined(inputs.cpu) ? inputs.cpu : 16
+
+	// @TODO: migrate to polars
+	countMatrixCsv := exec.builder().
+		software(assets.importSoftware("@platforma-open/milaboratories.import-sc-rnaseq-data.software:counts-csv")).
+		mem(mem).
+		cpu(cpu).
+		arg("--format")
+
+	if fileFormat == "csv" {
+		countMatrixCsv = countMatrixCsv.
+		addFile("inputCounts.csv", uniqueSampleData).
+		arg("csv").arg("--csv").
+		arg("inputCounts.csv").
+		arg("--gene-format").arg(geneFormat)
+
+		if geneFormat == "gene symbol" {
+			countMatrixCsv = countMatrixCsv.
+			addAsset(geneAsset, ".", geneAssetName).
+			arg("--annotation").arg(geneAssetName)
+		}
+
+	} else if fileFormat == "mtx" { // placeholder
+		countMatrixCsv = countMatrixCsv.
+		addFile("matrix.mtx.gz", inputData). // placeholder
+		addFile("barcodes.tsv.gz", inputData). // placeholder
+		addFile("features.tsv.gz", inputData). // placeholder
+		arg("mtx").
+		arg("--matrix").arg("matrix.mtx.gz").
+		arg("--barcodes").arg("barcodes.tsv.gz").
+		arg("--features").arg("features.tsv.gz")
+	} else if fileFormat == "" {
+		ll.panic("ERROR: Unsupported file format: %v", fileExtension)
+	}
+	
+	countMatrixCsv = countMatrixCsv.
+		arg("--output").arg("counts.csv").
+		saveFile("counts.csv").
+		saveFile("counts_normalized.csv").
+		printErrStreamToStdout().
+		run()
+
+	rawCounts := countMatrixCsv.getFile("counts.csv")
+	normCounts := countMatrixCsv.getFile("counts_normalized.csv")
+
+	// Set default memory and CPU for imports
+    defaultConvMem := "16GiB" // @TODO: set based on the size of the input
+    defaultConvCpu := 1 // @TODO: set based on the size of the input
+	
+	cellMetricsCsv := exec.builder().
+		software(assets.importSoftware("@platforma-open/milaboratories.import-sc-rnaseq-data.software:cell-metrics")).
+		mem(mem).
+		cpu(cpu).
+		arg("--format").arg(fileFormat)
+
+	if fileFormat == "csv" {
+		cellMetricsCsv = cellMetricsCsv.
+		addFile("rawCounts.csv", rawCounts).
+		arg("--csv").arg("rawCounts.csv")
+	} else if fileFormat == "mtx" {
+		cellMetricsCsv = cellMetricsCsv.
+		addFile("matrix.mtx.gz", inputData). // @TODO: how to add mtx files
+		addFile("barcodes.tsv.gz", inputData). // @TODO: how to add mtx files
+		addFile("features.tsv.gz", rawCounts). // @TODO: how to add mtx files
+		arg("--mtx").arg("matrix.mtx.gz").
+		arg("--barcodes").arg("barcodes.tsv.gz").
+		arg("--features").arg("features.tsv.gz")
+	}
+		
+	cellMetricsCsv = cellMetricsCsv.
+		arg("--species").arg(species).
+		arg("--output").arg(".").
+		saveFile("cell_metrics.csv").
+		printErrStreamToStdout().
+		run()
+
+	filteredCellsCountsCsv := exec.builder().
+		software(assets.importSoftware("@platforma-open/milaboratories.import-sc-rnaseq-data.software:filter-cells")).
+		mem(mem).
+		cpu(cpu).
+		addFile("rawCounts.csv", rawCounts).
+		addFile("rawCounts_normalized.csv", normCounts).
+		addFile("cell_metrics.csv", cellMetricsCsv.getFile("cell_metrics.csv")).
+		arg("--raw_counts").arg("rawCounts.csv").
+		arg("--normalized_counts").arg("rawCounts_normalized.csv").
+		arg("--metrics").arg("cell_metrics.csv").
+		arg("--output_raw").arg("filtered_rawCounts.csv").
+		arg("--output_normalized").arg("filtered_rawCounts_normalized.csv").
+		saveFile("filtered_rawCounts.csv").
+		saveFile("filtered_rawCounts_normalized.csv").
+		printErrStreamToStdout().
+		run()
+
+	output := {
+		rawCountsCsv: filteredCellsCountsCsv.getFile("filtered_rawCounts.csv"),
+		normCountsCsv: filteredCellsCountsCsv.getFile("filtered_rawCounts_normalized.csv"),
+		cellMetricsCsv: cellMetricsCsv.getFile("cell_metrics.csv")
+	}
+
+	return output
+
+})

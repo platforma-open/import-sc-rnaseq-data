@@ -1,0 +1,149 @@
+{
+  "name": "@platforma-open/milaboratories.import-sc-rnaseq-data.software",
+  "version": "1.0.0",
+  "scripts": {
+    "build": "pl-pkg build",
+    "prepublishOnly": "pl-pkg prepublish",
+    "do-pack": "rm -f *.tgz && pl-pkg build && pnpm pack && mv platforma-open*.tgz package.tgz",
+    "changeset": "changeset",
+    "version-packages": "changeset version"
+  },
+  "files": [
+    "./dist/**/*"
+  ],
+  "dependencies": {},
+  "devDependencies": {
+    "@platforma-sdk/package-builder": "catalog:",
+    "@platforma-open/milaboratories.runenv-python-3": "catalog:"
+  },
+  "block-software": {
+    "entrypoints": {
+      "counts-csv": {
+        "binary": {
+          "artifact": {
+            "type": "python",
+            "registry": "platforma-open",
+            "environment": "@platforma-open/milaboratories.runenv-python-3:3.12.10",
+            "dependencies": {
+              "toolset": "pip",
+              "requirements": "requirements.txt"
+            },
+            "root": "./src/counts-csv"
+          },
+          "cmd": [
+            "python",
+            "{pkg}/generateCountsCsv.py"
+          ]
+        }
+      },
+      "cell-metrics": {
+        "binary": {
+          "artifact": {
+            "type": "python",
+            "registry": "platforma-open",
+            "environment": "@platforma-open/milaboratories.runenv-python-3:3.12.10",
+            "dependencies": {
+              "toolset": "pip",
+              "requirements": "requirements.txt"
+            },
+            "root": "./src/cell-metrics"
+          },
+          "cmd": [
+            "python",
+            "{pkg}/calculate_cellMetrics.py"
+          ]
+        }
+      },
+      "map-genes": {
+        "binary": {
+          "artifact": {
+            "type": "python",
+            "registry": "platforma-open",
+            "environment": "@platforma-open/milaboratories.runenv-python-3:3.12.10",
+            "dependencies": {
+              "toolset": "pip",
+              "requirements": "requirements.txt"
+            },
+            "root": "./src/map-genes"
+          },
+          "cmd": [
+            "python",
+            "{pkg}/map_genes.py"
+          ]
+        }
+      },
+      "filter-cells": {
+        "binary": {
+          "artifact": {
+            "type": "python",
+            "registry": "platforma-open",
+            "environment": "@platforma-open/milaboratories.runenv-python-3:3.12.10",
+            "dependencies": {
+              "toolset": "pip",
+              "requirements": "requirements.txt"
+            },
+            "root": "./src/filter-cells"
+          },
+          "cmd": [
+            "python",
+            "{pkg}/filter_cells.py"
+          ]
+        }
+      },
+      "filter-genes": {
+        "binary": {
+          "artifact": {
+            "type": "python",
+            "registry": "platforma-open",
+            "environment": "@platforma-open/milaboratories.runenv-python-3:3.12.10",
+            "dependencies": {
+              "toolset": "pip",
+              "requirements": "requirements.txt"
+            },
+            "root": "./src/filter-genes"
+          },
+          "cmd": [
+            "python",
+            "{pkg}/filter_genes.py"
+          ]
+        }
+      },
+      "infer-species": {
+        "binary": {
+          "artifact": {
+            "type": "python",
+            "registry": "platforma-open",
+            "environment": "@platforma-open/milaboratories.runenv-python-3:3.12.10",
+            "dependencies": {
+              "toolset": "pip",
+              "requirements": "requirements.txt"
+            },
+            "root": "./src/infer-species"
+          },
+          "cmd": [
+            "python",
+            "{pkg}/infer_species.py"
+          ]
+        }
+      },
+      "results-summary": {
+        "binary": {
+          "artifact": {
+            "type": "python",
+            "registry": "platforma-open",
+            "environment": "@platforma-open/milaboratories.runenv-python-3:3.12.10",
+            "dependencies": {
+              "toolset": "pip",
+              "requirements": "requirements.txt"
+            },
+            "root": "./src/results-summary"
+          },
+          "cmd": [
+            "python",
+            "{pkg}/calculate_sample_metrics.py"
+          ]
+        }
+      }
+    }
+  }
+}

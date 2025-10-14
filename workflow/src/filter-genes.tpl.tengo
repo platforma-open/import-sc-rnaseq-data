@@ -1,0 +1,30 @@
+self := import("@platforma-sdk/workflow-tengo:tpl")
+
+exec := import("@platforma-sdk/workflow-tengo:exec")
+assets := import("@platforma-sdk/workflow-tengo:assets")
+
+self.defineOutputs("filteredGenesCountsCsv", "filteredGenesNormalizedCountsCsv")
+
+self.body(func(inputs) {
+	csvCounts := inputs.csvCounts
+	normCounts := inputs.normCounts
+
+	filteredGenesCountsCsvJob := exec.builder().
+		software(assets.importSoftware("@platforma-open/milaboratories.import-sc-rnaseq-data.software:filter-genes")).
+		mem("16GiB").
+		cpu(1).
+		addFile("rawCounts.csv", csvCounts).
+		addFile("rawCounts_normalized.csv", normCounts).
+		arg("--raw_counts").arg("rawCounts.csv").
+		arg("--normalized_counts").arg("rawCounts_normalized.csv").
+		arg("--output_raw").arg("filtered_rawCounts.csv").
+		arg("--output_normalized").arg("filtered_rawCounts_normalized.csv").
+		saveFile("filtered_rawCounts.csv").
+		saveFile("filtered_rawCounts_normalized.csv").
+		run()
+
+	return {
+		filteredGenesCountsCsv: filteredGenesCountsCsvJob.getFile("filtered_rawCounts.csv"),
+		filteredGenesNormalizedCountsCsv: filteredGenesCountsCsvJob.getFile("filtered_rawCounts_normalized.csv")
+	}
+})

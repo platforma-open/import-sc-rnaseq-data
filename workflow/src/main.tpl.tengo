@@ -1,0 +1,46 @@
+wf := import("@platforma-sdk/workflow-tengo:workflow")
+exec := import("@platforma-sdk/workflow-tengo:exec")
+assets:= import("@platforma-sdk/workflow-tengo:assets")
+render := import("@platforma-sdk/workflow-tengo:render")
+smart := import("@platforma-sdk/workflow-tengo:smart")
+pframes := import("@platforma-sdk/workflow-tengo:pframes")
+
+processTpl := assets.importTemplate(":process")
+inferSpeciesTpl := assets.importTemplate(":infer-species")
+
+wf.body(func(args) {
+
+	input := wf.resolve(args.datasetRef, { errIfMissing: true })
+	blockId := wf.getBlockId()
+
+	// First infer species
+	inferSpeciesRun := render.createEphemeral(inferSpeciesTpl, {
+		input: input.getFutureInputField("data")
+	})
+
+	processRun := render.createEphemeral(processTpl, {
+		inputSpec: input.getFutureInputField("spec"),
+		inputData: input.getFutureInputField("data"),
+		species: inferSpeciesRun.output("species"),
+		geneFormat: inferSpeciesRun.output("geneFormat"),
+
+		params: smart.createJsonResource({
+			blockId: blockId
+			// mem: args.mem,
+			// cpu: args.cpu
+		})
+	})
+
+	return {
+		outputs: {
+			rawCountsPf: pframes.exportFrame(processRun.output("rawCountsPf")),
+			cellMetricsPf: pframes.exportFrame(processRun.output("cellMetricsPf")),
+			resultsSummaryPf: pframes.exportFrame(processRun.output("resultsSummaryPf"))
+		},
+		exports: {
+			exports: processRun.output("exports"),
+			cellMetricsPf: processRun.output("cellMetricsPf")
+		}
+	}
+})
+
