@@ -1,5 +1,11 @@
 # @platforma-open/milaboratories.import-sc-rnaseq-data.model
 
+## 1.1.1
+
+### Patch Changes
+
+- 2c32685: Technical release
+
 ## 1.1.0
 
 ### Minor Changes
