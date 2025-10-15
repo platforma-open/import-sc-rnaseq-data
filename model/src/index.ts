@@ -1,6 +1,6 @@
+import type { GraphMakerState } from '@milaboratories/graph-maker';
 import type { InferOutputsType, PColumnIdAndSpec, PlDataTableStateV2, PlRef } from '@platforma-sdk/model';
 import { BlockModel, createPlDataTableStateV2, createPlDataTableV2, isPColumn, isPColumnSpec } from '@platforma-sdk/model';
-import type { GraphMakerState } from '@milaboratories/graph-maker';
 
 export type BlockArgs = {
   datasetRef?: PlRef;
@@ -12,6 +12,7 @@ export type UiState = {
   title: string;
   settingsOpen: boolean;
   graphState: GraphMakerState;
+  allowRun: boolean;
 };
 
 export const model = BlockModel.create()
@@ -31,11 +32,13 @@ export const model = BlockModel.create()
       //   },
       // },
     },
+    allowRun: false,
   })
 
   .argsValid((ctx) => {
     const { datasetRef } = ctx.args;
     if (datasetRef === undefined) return false;
+    if (!ctx.uiState.allowRun) return false;
 
     return true;
   })
@@ -55,6 +58,15 @@ export const model = BlockModel.create()
       );
     },
     );
+  })
+
+  .output('errorLog', (ctx) => {
+    const pCols = ctx.prerun?.resolve({ field: 'errorLog', allowPermanentAbsence: true })?.getPColumns();
+    if (pCols === undefined) {
+      return undefined;
+    }
+
+    return ctx.createPFrame(pCols);
   })
 
   .output('resultsSummaryPf', (ctx) => {
@@ -106,7 +118,8 @@ export const model = BlockModel.create()
     return pCols[0].spec;
   })
 
-  .output('isRunning', (ctx) => ctx.outputs?.getIsReadyOrError() === false)
+  .output('isRunning', (ctx) => ctx.outputs?.getIsReadyOrError() === false
+    || ctx.prerun?.getIsReadyOrError() === false)
 
   .sections([
     { type: 'link', href: '/', label: 'Main' },

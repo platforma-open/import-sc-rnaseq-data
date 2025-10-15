@@ -1,0 +1,60 @@
+self := import("@platforma-sdk/workflow-tengo:tpl")
+exec := import("@platforma-sdk/workflow-tengo:exec")
+assets := import("@platforma-sdk/workflow-tengo:assets")
+pData := import("@platforma-sdk/workflow-tengo:pframes.data")
+maps := import("@platforma-sdk/workflow-tengo:maps")
+ll := import("@platforma-sdk/workflow-tengo:ll")
+pt := import("@platforma-sdk/workflow-tengo:pt")
+xsv := import("@platforma-sdk/workflow-tengo:pframes.xsv")
+pframes := import("@platforma-sdk/workflow-tengo:pframes")
+
+pfErrorLogsConv := import(":libs.pf-errors-conv")
+
+self.defineOutputs("errorLog")
+
+self.body(func(inputs) {
+	inputData := inputs.input
+	// Set default conversion memory and CPU
+	defaultConvMem := "16GiB"
+	defaultConvCpu := 1
+
+	parsedData := pData.parseData(inputData, { expectedKeyLength: 1 })
+	sampleKeys := maps.getKeys(parsedData.data)
+
+	wf := pt.workflow().cpu(1).mem("2GiB")
+	dfsErrorLogs := []
+	// Schema is needed because some files might have errors (and hence 
+	// content in "check_error.csv), whereas others won't
+	schemaErrorLogs := [
+		{column: "Index", type: "String"},
+		{column: "Log", type: "String"}
+	]
+
+	for sk in sampleKeys {
+		checkInputFileJob := exec.builder().
+			software(assets.importSoftware("@platforma-open/milaboratories.import-sc-rnaseq-data.software:check-format")).
+			mem("16GiB").
+			cpu(1).
+			addFile("rawCounts.csv", parsedData.data[sk]).
+			arg("rawCounts.csv").
+			saveFile("check_error.tsv").
+			run()
+
+		dfsErrorLogs += [wf.frame(checkInputFileJob.getFile("check_error.tsv"), {xsvType: "tsv", schema: schemaErrorLogs})]
+	}
+
+	// Concatenate and deduplicate error files
+	concatenatedErrors := pt.concat(dfsErrorLogs)
+	// @TODO: find a better way to remove duplicated lines
+	uniqueErrors := concatenatedErrors.groupBy("Index").agg(
+		pt.col("Log").first().alias("Log")
+	)
+	uniqueErrors.save("concatenated_output_errors.tsv")
+	ptablerResult := wf.run()
+	errorsPf := xsv.importFile(ptablerResult.getFile("concatenated_output_errors.tsv"), "tsv", 
+								pfErrorLogsConv.getColumns(), { mem: defaultConvMem, cpu: defaultConvCpu })
+
+	return {
+		errorLog: pframes.exportFrame(errorsPf)
+	}
+})
