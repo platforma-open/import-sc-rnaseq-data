@@ -153,10 +153,10 @@ Examples:
         with open(args.output, 'w') as f:
             f.write(f"Index\tLog\n{e}")
     except Exception as e:
-        print(f"Unexpected error: {e}", file=sys.stderr)
+        print(f"Data structure not correct: {e}", file=sys.stderr)
         # Store error message in output file
         with open(args.output, 'w') as f:
-            f.write(f"Index\tLog\n5\tUnexpected error: {e}\n")
+            f.write(f"Index\tLog\n5\tData structure not correct\n")
 
 
 if __name__ == '__main__':
