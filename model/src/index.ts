@@ -121,6 +121,8 @@ export const model = BlockModel.create()
   .output('isRunning', (ctx) => ctx.outputs?.getIsReadyOrError() === false
     || ctx.prerun?.getIsReadyOrError() === false)
 
+  .output('runningPrerun', (ctx) => ctx.prerun?.getIsReadyOrError() === false)
+
   .sections([
     { type: 'link', href: '/', label: 'Main' },
     { type: 'link', href: '/CellQC', label: 'Cell QC' },
