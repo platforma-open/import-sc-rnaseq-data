@@ -35,7 +35,7 @@ self.body(func(inputs) {
 
 	fileFormat := ""
 	if fileExtension == "csv" || fileExtension == "csv.gz" || fileExtension == "tsv" || fileExtension == "tsv.gz" {
-		fileFormat = "csv"
+		fileFormat = "xsv"
 	} else if fileExtension == "mtx" || fileExtension == "mtx.gz" {
 		fileFormat = "mtx"
 	}
@@ -53,11 +53,11 @@ self.body(func(inputs) {
 		cpu(cpu).
 		arg("--format")
 
-	if fileFormat == "csv" {
+	if fileFormat == "xsv" {
 		countMatrixCsv = countMatrixCsv.
-		addFile("inputCounts.csv", uniqueSampleData).
-		arg("csv").arg("--csv").
-		arg("inputCounts.csv").
+		addFile("inputCounts." + fileExtension, uniqueSampleData).
+		arg("xsv").
+		arg("--xsv").arg("inputCounts." + fileExtension).
 		arg("--gene-format").arg(geneFormat)
 
 		if geneFormat == "gene symbol" {
@@ -96,15 +96,16 @@ self.body(func(inputs) {
 	cellMetricsCsv := exec.builder().
 		software(assets.importSoftware("@platforma-open/milaboratories.import-sc-rnaseq-data.software:cell-metrics")).
 		mem(mem).
-		cpu(cpu).
-		arg("--format").arg(fileFormat)
+		cpu(cpu)
 
-	if fileFormat == "csv" {
+	if fileFormat == "xsv" {
 		cellMetricsCsv = cellMetricsCsv.
+		arg("--format").arg("csv").
 		addFile("rawCounts.csv", rawCounts).
 		arg("--csv").arg("rawCounts.csv")
 	} else if fileFormat == "mtx" {
 		cellMetricsCsv = cellMetricsCsv.
+		arg("--format").arg(fileFormat).
 		addFile("matrix.mtx.gz", inputData). // @TODO: how to add mtx files
 		addFile("barcodes.tsv.gz", inputData). // @TODO: how to add mtx files
 		addFile("features.tsv.gz", rawCounts). // @TODO: how to add mtx files
