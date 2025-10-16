@@ -14,12 +14,15 @@ self.defineOutputs("errorLog")
 
 self.body(func(inputs) {
 	inputData := inputs.input
+	inputSpec := inputs.inputSpec
 	// Set default conversion memory and CPU
 	defaultConvMem := "16GiB"
 	defaultConvCpu := 1
 
 	parsedData := pData.parseData(inputData, { expectedKeyLength: 1 })
 	sampleKeys := maps.getKeys(parsedData.data)
+
+	fileExtension := inputSpec.domain["pl7.app/fileExtension"]
 
 	wf := pt.workflow().cpu(1).mem("2GiB")
 	dfsErrorLogs := []
@@ -35,8 +38,8 @@ self.body(func(inputs) {
 			software(assets.importSoftware("@platforma-open/milaboratories.import-sc-rnaseq-data.software:check-format")).
 			mem("16GiB").
 			cpu(1).
-			addFile("rawCounts.csv", parsedData.data[sk]).
-			arg("rawCounts.csv").
+			addFile("rawCounts." + fileExtension, parsedData.data[sk]).
+			arg("rawCounts." + fileExtension).
 			saveFile("check_error.tsv").
 			run()
 

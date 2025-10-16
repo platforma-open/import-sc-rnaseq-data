@@ -305,12 +305,12 @@ def process_csv_file(csv_path, output_csv_path, gene_format=None, annotation_pat
 
 def main():
     parser = argparse.ArgumentParser(description="Convert .mtx.gz, .tsv.gz files or CSV files into a count matrix CSV.")
-    parser.add_argument('--format', required=True, choices=['mtx', 'csv'], 
-                       help="Input format: 'mtx' for 10X Genomics format, 'csv' for CSV format")
+    parser.add_argument('--format', required=True, choices=['mtx', 'xsv'], 
+                       help="Input format: 'mtx' for 10X Genomics format, 'xsv' for CSV/TSV format")
     parser.add_argument('--matrix', help="Path to the matrix.mtx.gz file (required for mtx format)")
     parser.add_argument('--barcodes', help="Path to the barcodes.tsv.gz file (required for mtx format)")
     parser.add_argument('--features', help="Path to the features.tsv.gz file (required for mtx format)")
-    parser.add_argument('--csv', help="Path to the CSV file (required for csv format)")
+    parser.add_argument('--xsv', help="Path to the XSV file (required for csv format)")
     parser.add_argument('--gene-format', choices=['gene symbol', 'Ensembl Id'], 
                        help="Gene identifier format: 'gene symbol' or 'Ensembl Id' (for csv format only)")
     parser.add_argument('--annotation', help="Path to gene annotation CSV file (required when --gene-format is 'gene symbol')")
@@ -322,12 +322,12 @@ def main():
         if not all([args.matrix, args.barcodes, args.features]):
             parser.error("For mtx format, --matrix, --barcodes, and --features are required")
         process_input_files(args.matrix, args.barcodes, args.features, args.output)
-    elif args.format == 'csv':
-        if not args.csv:
-            parser.error("For csv format, --csv is required")
+    elif args.format == 'xsv':
+        if not args.xsv:
+            parser.error("For csv/tsv format, --xsv is required")
         if args.gene_format == 'gene symbol' and not args.annotation:
             parser.error("For gene format 'gene symbol', --annotation is required")
-        process_csv_file(args.csv, args.output, args.gene_format, args.annotation)
+        process_csv_file(args.xsv, args.output, args.gene_format, args.annotation)
 
 if __name__ == "__main__":
     main()

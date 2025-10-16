@@ -22,7 +22,8 @@ wf.body(func(args) {
 	input := wf.resolve(args.datasetRef, { errIfMissing: true })
 
 	checkFormat := render.create(checkFormatTpl, {
-		input: input.getFutureInputField("data")
+		input: input.getFutureInputField("data"),
+		inputSpec: input.getFutureInputField("spec")
 	})
 
 	errorLog := checkFormat.output("errorLog")

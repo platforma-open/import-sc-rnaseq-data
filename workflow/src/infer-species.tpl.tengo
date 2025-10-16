@@ -8,6 +8,9 @@ self.defineOutputs("species", "geneFormat")
 
 self.body(func(inputs) {
 	inputData := inputs.input
+	inputSpec := inputs.inputSpec
+
+	fileExtension := inputSpec.domain["pl7.app/fileExtension"]
 
 	parsedData := pData.parseData(inputData, { expectedKeyLength: 1 })
 	firstKey := maps.getKeys(parsedData.data)[0]
@@ -17,8 +20,8 @@ self.body(func(inputs) {
 		software(assets.importSoftware("@platforma-open/milaboratories.import-sc-rnaseq-data.software:infer-species")).
 		mem("16GiB").
 		cpu(1).
-		addFile("rawCounts.csv", firstSampleData).
-		arg("rawCounts.csv").
+		addFile("rawCounts." + fileExtension, firstSampleData).
+		arg("rawCounts." + fileExtension).
 		saveFileContent("species.txt").
 		saveFileContent("gene_format.txt").
 		printErrStreamToStdout().
