@@ -1,5 +1,13 @@
 # @platforma-open/milaboratories.import-sc-rnaseq-data.ui
 
+## 1.1.2
+
+### Patch Changes
+
+- ce5778a: Add file check in prerun
+- Updated dependencies [ce5778a]
+  - @platforma-open/milaboratories.import-sc-rnaseq-data.model@1.1.2
+
 ## 1.1.1
 
 ### Patch Changes

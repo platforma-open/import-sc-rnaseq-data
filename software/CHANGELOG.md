@@ -1,5 +1,11 @@
 # @platforma-open/milaboratories.import-sc-rnaseq-data.software
 
+## 1.1.2
+
+### Patch Changes
+
+- ce5778a: Add file check in prerun
+
 ## 1.1.1
 
 ### Patch Changes
