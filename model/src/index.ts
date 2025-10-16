@@ -4,6 +4,10 @@ import { BlockModel, createPlDataTableStateV2, createPlDataTableV2, isPColumn, i
 
 export type BlockArgs = {
   datasetRef?: PlRef;
+  matrixFileRef?: PlRef;
+  barcodesFileRef?: PlRef;
+  genesFileRef?: PlRef;
+  importMode: 'csv' | 'mtx';
   // name?: string;
 };
 
@@ -17,7 +21,9 @@ export type UiState = {
 
 export const model = BlockModel.create()
 
-  .withArgs<BlockArgs>({})
+  .withArgs<BlockArgs>({
+    importMode: 'csv',
+  })
 
   .withUiState<UiState>({
     tableState: createPlDataTableStateV2(),
@@ -36,9 +42,17 @@ export const model = BlockModel.create()
   })
 
   .argsValid((ctx) => {
-    const { datasetRef } = ctx.args;
-    if (datasetRef === undefined) return false;
-    if (!ctx.uiState.allowRun) return false;
+    const { importMode, datasetRef, matrixFileRef, barcodesFileRef, genesFileRef } = ctx.args;
+    if (importMode === 'csv') {
+      if (datasetRef === undefined) return false;
+      if (!ctx.uiState.allowRun) return false;
+    }
+
+    if (importMode === 'mtx') {
+      if (matrixFileRef === undefined) return false;
+      if (barcodesFileRef === undefined) return false;
+      if (genesFileRef === undefined) return false;
+    }
 
     return true;
   })
@@ -54,6 +68,36 @@ export const model = BlockModel.create()
         && (domain['pl7.app/fileExtension'] === 'csv'
           || domain['pl7.app/fileExtension'] === 'csv.gz'
           || domain['pl7.app/fileExtension'] === 'tsv'
+          || domain['pl7.app/fileExtension'] === 'tsv.gz')
+      );
+    },
+    );
+  })
+
+  .output('matrixFileOptions', (ctx) => {
+    return ctx.resultPool.getOptions((v) => {
+      if (!isPColumnSpec(v)) return false;
+      const domain = v.domain;
+      return (
+        v.name === 'pl7.app/sequencing/data'
+        && (v.valueType as string) === 'File'
+        && domain !== undefined
+        && (domain['pl7.app/fileExtension'] === 'mtx'
+          || domain['pl7.app/fileExtension'] === 'mtx.gz')
+      );
+    },
+    );
+  })
+
+  .output('barcodesFileOptions', (ctx) => {
+    return ctx.resultPool.getOptions((v) => {
+      if (!isPColumnSpec(v)) return false;
+      const domain = v.domain;
+      return (
+        v.name === 'pl7.app/sequencing/data'
+        && (v.valueType as string) === 'File'
+        && domain !== undefined
+        && (domain['pl7.app/fileExtension'] === 'tsv'
           || domain['pl7.app/fileExtension'] === 'tsv.gz')
       );
     },

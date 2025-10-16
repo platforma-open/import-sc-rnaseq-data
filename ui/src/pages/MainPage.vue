@@ -5,6 +5,7 @@ import {
   PlAlert,
   PlBlockPage,
   PlBtnGhost,
+  PlBtnGroup,
   PlDropdownRef,
   PlMaskIcon24,
   PlSlideModal,
@@ -28,6 +29,20 @@ const setDataset = (datasetRef: PlRef | undefined) => {
   app.model.args.datasetRef = datasetRef;
   if (datasetRef)
     app.model.ui.title = 'Import GEX Data - ' + app.model.outputs.datasetOptions?.find((o) => plRefsEqual(o.ref, datasetRef))?.label;
+};
+
+const setMatrixDataset = (matrixFileRef: PlRef | undefined) => {
+  app.model.args.matrixFileRef = matrixFileRef;
+  if (matrixFileRef)
+    app.model.ui.title = 'Import GEX Data - ' + app.model.outputs.datasetOptions?.find((o) => plRefsEqual(o.ref, matrixFileRef))?.label;
+};
+
+const setBarcodesDataset = (barcodesFileRef: PlRef | undefined) => {
+  app.model.args.barcodesFileRef = barcodesFileRef;
+};
+
+const setGenesDataset = (genesFileRef: PlRef | undefined) => {
+  app.model.args.genesFileRef = genesFileRef;
 };
 
 const tableSettings = usePlDataTableSettingsV2({
@@ -81,14 +96,55 @@ const errorLogs = useWatchFetch(() => app.model.outputs.errorLog, async (pframeH
 
     <PlSlideModal :model-value="app.model.ui.settingsOpen" @update:model-value="onModalUpdate">
       <template #title>Settings</template>
-      <PlDropdownRef
-        v-model="app.model.args.datasetRef"
-        :options="app.model.outputs.datasetOptions"
-        label="Select dataset"
-        clearable
-        required
-        @update:model-value="setDataset"
+
+      <PlBtnGroup
+        v-model="app.model.args.importMode"
+        :options="[
+          { value: 'csv', label: 'From CSV' },
+          { value: 'mtx', label: 'From MTX' },
+        ]"
+        label="Importing format"
+        tooltip="Select the input format for the gene expression data. Can be either a CSV/TSV file or matrix, barcodes and genes files."
       />
+
+      <template v-if="app.model.args.importMode === 'csv'">
+        <PlDropdownRef
+          v-model="app.model.args.datasetRef"
+          :options="app.model.outputs.datasetOptions"
+          label="Select dataset"
+          clearable
+          required
+          @update:model-value="setDataset"
+        />
+      </template>
+
+      <template v-if="app.model.args.importMode === 'mtx'">
+        <PlDropdownRef
+          v-model="app.model.args.matrixFileRef"
+          :options="app.model.outputs.matrixFileOptions"
+          label="Select dataset with matrix files"
+          clearable
+          required
+          @update:model-value="setMatrixDataset"
+        />
+        <PlDropdownRef
+          v-model="app.model.args.barcodesFileRef"
+          :options="app.model.outputs.barcodesFileOptions"
+          label="Select dataset with barcodes files"
+          clearable
+          required
+          @update:model-value="setBarcodesDataset"
+        />
+        <PlDropdownRef
+          v-model="app.model.args.genesFileRef"
+          :options="app.model.outputs.barcodesFileOptions"
+          label="Select dataset with genes files"
+          clearable
+          required
+          @update:model-value="setGenesDataset"
+        />
+      </template>
+
       <PlAlert v-if="errorLogs.value !== undefined" type="warn" icon>
         {{ errorLogs.value }}
       </PlAlert>
@@ -99,3 +155,6 @@ const errorLogs = useWatchFetch(() => app.model.outputs.errorLog, async (pframeH
     <PlAgDataTableV2 v-model="app.model.ui.tableState" :settings="tableSettings" show-export-button />
   </PlBlockPage>
 </template>
+
+<style scoped>
+</style>
