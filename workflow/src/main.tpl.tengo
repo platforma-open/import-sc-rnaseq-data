@@ -8,6 +8,8 @@ pframes := import("@platforma-sdk/workflow-tengo:pframes")
 processTpl := assets.importTemplate(":process")
 inferSpeciesTpl := assets.importTemplate(":infer-species")
 
+wf.setPreRun(assets.importTemplate(":prerun"))
+
 wf.body(func(args) {
 
 	input := wf.resolve(args.datasetRef, { errIfMissing: true })
