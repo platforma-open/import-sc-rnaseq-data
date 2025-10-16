@@ -1,5 +1,11 @@
 # @platforma-open/milaboratories.import-sc-rnaseq-data.software
 
+## 1.1.3
+
+### Patch Changes
+
+- 2bcce25: Allow tSV inputs
+
 ## 1.1.2
 
 ### Patch Changes
