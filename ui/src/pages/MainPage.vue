@@ -31,18 +31,10 @@ const setDataset = (datasetRef: PlRef | undefined) => {
     app.model.ui.title = 'Import GEX Data - ' + app.model.outputs.datasetOptions?.find((o) => plRefsEqual(o.ref, datasetRef))?.label;
 };
 
-const setMatrixDataset = (matrixFileRef: PlRef | undefined) => {
-  app.model.args.matrixFileRef = matrixFileRef;
-  if (matrixFileRef)
-    app.model.ui.title = 'Import GEX Data - ' + app.model.outputs.datasetOptions?.find((o) => plRefsEqual(o.ref, matrixFileRef))?.label;
-};
-
-const setBarcodesDataset = (barcodesFileRef: PlRef | undefined) => {
-  app.model.args.barcodesFileRef = barcodesFileRef;
-};
-
-const setGenesDataset = (genesFileRef: PlRef | undefined) => {
-  app.model.args.genesFileRef = genesFileRef;
+const setMtxDataset = (mtxDatasetRef: PlRef | undefined) => {
+  app.model.args.mtxDatasetRef = mtxDatasetRef;
+  if (mtxDatasetRef)
+    app.model.ui.title = 'Import GEX Data - ' + app.model.outputs.mtxDatasetOptions?.find((o) => plRefsEqual(o.ref, mtxDatasetRef))?.label;
 };
 
 const tableSettings = usePlDataTableSettingsV2({
@@ -120,28 +112,12 @@ const errorLogs = useWatchFetch(() => app.model.outputs.errorLog, async (pframeH
 
       <template v-if="app.model.args.importMode === 'mtx'">
         <PlDropdownRef
-          v-model="app.model.args.matrixFileRef"
-          :options="app.model.outputs.matrixFileOptions"
-          label="Select dataset with matrix files"
+          v-model="app.model.args.mtxDatasetRef"
+          :options="app.model.outputs.mtxDatasetOptions"
+          label="Select MTX dataset"
           clearable
           required
-          @update:model-value="setMatrixDataset"
-        />
-        <PlDropdownRef
-          v-model="app.model.args.barcodesFileRef"
-          :options="app.model.outputs.barcodesFileOptions"
-          label="Select dataset with barcodes files"
-          clearable
-          required
-          @update:model-value="setBarcodesDataset"
-        />
-        <PlDropdownRef
-          v-model="app.model.args.genesFileRef"
-          :options="app.model.outputs.barcodesFileOptions"
-          label="Select dataset with genes files"
-          clearable
-          required
-          @update:model-value="setGenesDataset"
+          @update:model-value="setMtxDataset"
         />
       </template>
 

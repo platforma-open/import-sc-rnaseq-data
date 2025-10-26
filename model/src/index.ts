@@ -4,9 +4,7 @@ import { BlockModel, createPlDataTableStateV2, createPlDataTableV2, isPColumn, i
 
 export type BlockArgs = {
   datasetRef?: PlRef;
-  matrixFileRef?: PlRef;
-  barcodesFileRef?: PlRef;
-  genesFileRef?: PlRef;
+  mtxDatasetRef?: PlRef;
   importMode: 'csv' | 'mtx';
   // name?: string;
 };
@@ -42,16 +40,14 @@ export const model = BlockModel.create()
   })
 
   .argsValid((ctx) => {
-    const { importMode, datasetRef, matrixFileRef, barcodesFileRef, genesFileRef } = ctx.args;
+    const { importMode, datasetRef, mtxDatasetRef } = ctx.args;
     if (importMode === 'csv') {
       if (datasetRef === undefined) return false;
       if (!ctx.uiState.allowRun) return false;
     }
 
     if (importMode === 'mtx') {
-      if (matrixFileRef === undefined) return false;
-      if (barcodesFileRef === undefined) return false;
-      if (genesFileRef === undefined) return false;
+      if (mtxDatasetRef === undefined) return false;
     }
 
     return true;
@@ -74,31 +70,15 @@ export const model = BlockModel.create()
     );
   })
 
-  .output('matrixFileOptions', (ctx) => {
+  .output('mtxDatasetOptions', (ctx) => {
     return ctx.resultPool.getOptions((v) => {
       if (!isPColumnSpec(v)) return false;
-      const domain = v.domain;
+      // Check if it has the cellRangerFileRole axis
+      const hasRoleAxis = v.axesSpec?.some((axis) => axis.name === 'pl7.app/sc/cellRangerFileRole');
       return (
         v.name === 'pl7.app/sequencing/data'
         && (v.valueType as string) === 'File'
-        && domain !== undefined
-        && (domain['pl7.app/fileExtension'] === 'mtx'
-          || domain['pl7.app/fileExtension'] === 'mtx.gz')
-      );
-    },
-    );
-  })
-
-  .output('barcodesFileOptions', (ctx) => {
-    return ctx.resultPool.getOptions((v) => {
-      if (!isPColumnSpec(v)) return false;
-      const domain = v.domain;
-      return (
-        v.name === 'pl7.app/sequencing/data'
-        && (v.valueType as string) === 'File'
-        && domain !== undefined
-        && (domain['pl7.app/fileExtension'] === 'tsv'
-          || domain['pl7.app/fileExtension'] === 'tsv.gz')
+        && hasRoleAxis
       );
     },
     );
