@@ -14,11 +14,13 @@ wf.body(func(args) {
 
 	input := wf.resolve(args.datasetRef, { errIfMissing: true })
 	blockId := wf.getBlockId()
+	importMode := string(args.importMode)
 
 	// First infer species
 	inferSpeciesRun := render.createEphemeral(inferSpeciesTpl, {
 		input: input.getFutureInputField("data"),
-		inputSpec: input.getFutureInputField("spec")
+		inputSpec: input.getFutureInputField("spec"),
+		importMode: importMode
 	})
 
 	processRun := render.createEphemeral(processTpl, {

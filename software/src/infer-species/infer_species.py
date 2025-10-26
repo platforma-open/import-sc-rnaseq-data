@@ -655,6 +655,81 @@ class CountMatrixAnalyzer:
         self.gene_identifiers = [str(gene_id) for gene_id in self.gene_identifiers if gene_id is not None]
 
 
+def infer_species_from_mtx(features_file: str) -> str:
+    """
+    Infer species from a 10X Genomics features file (TSV format).
+    
+    Args:
+        features_file: Path to the features.tsv.gz file
+        
+    Returns:
+        Inferred species name
+    """
+    try:
+        # Load the features file
+        features_path = Path(features_file)
+        
+        # Determine file format and read accordingly
+        if features_path.suffix.lower() == '.gz':
+            # Compressed file
+            if features_path.stem.endswith('.tsv'):
+                df = pl.read_csv(features_file, separator='\t', has_header=False)
+            else:
+                df = pl.read_csv(features_file, has_header=False)
+        else:
+            # Uncompressed file
+            if features_path.suffix.lower() in ['.tsv', '.txt']:
+                df = pl.read_csv(features_file, separator='\t', has_header=False)
+            else:
+                df = pl.read_csv(features_file, has_header=False)
+        
+        # Extract gene identifiers from first column (Ensembl IDs)
+        gene_identifiers = df.select(pl.col(df.columns[0])).to_series().to_list()
+        
+        if not gene_identifiers:
+            raise SpeciesInferenceError("No gene identifiers found in the features file")
+        
+        # Analyze gene identifiers to infer species
+        gene_analyzer = GeneIdentifierAnalyzer()
+        species_scores = gene_analyzer.analyze_identifiers(gene_identifiers)
+        
+        if not species_scores:
+            raise SpeciesInferenceError("Could not infer species from gene identifiers")
+        
+        # Get the species with the highest score
+        max_score = max(species_scores.values())
+        best_candidates = [species for species, score in species_scores.items() if score == max_score]
+        
+        # Tie-breaking priority: prioritize species with more distinctive patterns
+        tie_breaker_priority = ['yeast', 'worm', 'arabidopsis', 'fly', 'zebrafish', 'rat', 'mouse', 'chicken', 'cow', 'pig', 'human']
+        
+        best_species = best_candidates[0]  # Default to first candidate
+        for priority_species in tie_breaker_priority:
+            if priority_species in best_candidates:
+                best_species = priority_species
+                break
+        
+        # Convert to standard format (e.g., "homo-sapiens")
+        species_mapping = {
+            'human': 'homo-sapiens',
+            'mouse': 'mus-musculus',
+            'rat': 'rattus-norvegicus',
+            'zebrafish': 'danio-rerio',
+            'fly': 'drosophila-melanogaster',
+            'worm': 'caenorhabditis-elegans',
+            'yeast': 'saccharomyces-cerevisiae',
+            'arabidopsis': 'arabidopsis-thaliana',
+            'chicken': 'gallus-gallus',
+            'cow': 'bos-taurus',
+            'pig': 'sus-scrofa'
+        }
+        
+        return species_mapping.get(best_species, best_species)
+        
+    except Exception as e:
+        raise SpeciesInferenceError(f"Error inferring species from MTX features file: {e}")
+
+
 def infer_species(input_file: str) -> str:
     """
     Main function to infer species from a count matrix file.
@@ -723,14 +798,22 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-    python infer_species.py data.csv
-    python infer_species.py data.tsv
+    python infer_species.py data.csv --format csv
+    python infer_species.py data.tsv --format csv
+    python infer_species.py features.tsv.gz --format mtx
         """
     )
     
     parser.add_argument(
         'input_file',
-        help='Path to the input CSV or TSV file containing the count matrix'
+        help='Path to the input file (CSV/TSV for csv format, TSV for mtx format)'
+    )
+    
+    parser.add_argument(
+        '--format', '-f',
+        choices=['csv', 'mtx'],
+        default='csv',
+        help='Input format: csv for count matrix files, mtx for 10X Genomics features file (default: csv)'
     )
     
     parser.add_argument(
@@ -742,28 +825,35 @@ Examples:
     args = parser.parse_args()
     
     try:
-        # Infer species
-        species = infer_species(args.input_file)
+        # Infer species based on format
+        if args.format == 'csv':
+            species = infer_species(args.input_file)
+            
+            # Detect and write gene format
+            analyzer = CountMatrixAnalyzer(args.input_file)
+            gene_identifiers = analyzer.analyze()  # This initializes the dataframe
+            gene_analyzer = GeneIdentifierAnalyzer()
+            gene_analyzer.analyze_identifiers(gene_identifiers)
+            
+            # Map identifier type to format name
+            format_mapping = {
+                'symbol': 'gene symbol',
+                'ensembl': 'Ensembl Id', 
+                'entrez': 'Entrez Id'
+            }
+            
+            gene_format = format_mapping.get(gene_analyzer.identifier_type, 'unknown')
+            
+        elif args.format == 'mtx':
+            species = infer_species_from_mtx(args.input_file)
+            
+            # For MTX format, we know it's Ensembl IDs from the features file
+            gene_format = 'Ensembl Id'
         
         # Write species output
         output_path = Path(args.output)
         with open(output_path, 'w') as f:
             f.write(species)
-        
-        # Detect and write gene format
-        analyzer = CountMatrixAnalyzer(args.input_file)
-        gene_identifiers = analyzer.analyze()  # This initializes the dataframe
-        gene_analyzer = GeneIdentifierAnalyzer()
-        gene_analyzer.analyze_identifiers(gene_identifiers)
-        
-        # Map identifier type to format name
-        format_mapping = {
-            'symbol': 'gene symbol',
-            'ensembl': 'Ensembl Id', 
-            'entrez': 'Entrez Id'
-        }
-        
-        gene_format = format_mapping.get(gene_analyzer.identifier_type, 'unknown')
         
         # Write gene format output
         format_output_path = Path('gene_format.txt')
