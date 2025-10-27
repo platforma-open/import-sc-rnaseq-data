@@ -39,7 +39,15 @@ def load_data_mtx(matrix_path, barcodes_path, features_path):
 
     # Load features (gene IDs and gene symbols)
     features = pd.read_csv(features_path, sep='\t', header=None)
-    features.columns = ['gene_id', 'gene_symbol', 'feature_type']
+    
+    # Handle both 2-column and 3-column formats
+    if features.shape[1] == 3:
+        features.columns = ['gene_id', 'gene_symbol', 'feature_type']
+    elif features.shape[1] == 2:
+        features.columns = ['gene_id', 'gene_symbol']
+        features['feature_type'] = 'Gene Expression'  # Add default feature type
+    else:
+        raise ValueError(f"Features file must have 2 or 3 columns, found {features.shape[1]}")
 
     # Debugging output
     print(f"Matrix shape: {matrix.shape}")
