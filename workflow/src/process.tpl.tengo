@@ -29,6 +29,7 @@ self.body(func(inputs) {
 	blockId := inputs.params.blockId
 	species := string(inputs.species.getData())
 	geneFormat := string(inputs.geneFormat.getData())
+	importMode := string(inputs.importMode)
 
 	inputSpec := inputs.inputSpec
 	inputData := inputs.inputData
@@ -39,15 +40,18 @@ self.body(func(inputs) {
 		{ spec: inputSpec, data: inputData }, importCountsTpl,
 		targetOutputs.getTargetOutputs(species, blockId, inputSpec.axesSpec[0]),
 		{
-			aggregate: [],
+			aggregate: [{
+				name: "pl7.app/sampleId",
+				optional: true
+			}],
 
 			traceSteps: [{type: "milaboratories.import-sc-rnaseq-data", id: blockId, importance: 20, label: "Import scRNA-seq Data"}],
 
 			extra: {
 				species: species,
 				fileExtension: fileExtension,
-				geneFormat: geneFormat
-			}
+				geneFormat: geneFormat,
+				importMode: importMode			}
 			// ,
 			// metaExtra: {
 			// 	mem: inputs.params.mem,

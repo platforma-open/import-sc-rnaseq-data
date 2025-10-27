@@ -36,6 +36,7 @@ wf.body(func(args) {
 		inputData: input.getFutureInputField("data"),
 		species: inferSpeciesRun.output("species"),
 		geneFormat: inferSpeciesRun.output("geneFormat"),
+		importMode: importMode,
 
 		params: smart.createJsonResource({
 			blockId: blockId
