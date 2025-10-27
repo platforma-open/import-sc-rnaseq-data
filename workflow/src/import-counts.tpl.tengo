@@ -19,8 +19,7 @@ self.defineOutputs(
 
 self.body(func(inputs) {
 	inputData := inputs[pConstants.VALUE_FIELD_NAME]
-	// inputSpec := inputs.inputSpec
-	inputSpec := inputs.__distilled_aggregation_spec__
+	compressionLoaded := inputs.compression
 	species := inputs.species
 	fileExtension := inputs.fileExtension
 	geneFormat := inputs.geneFormat
@@ -43,21 +42,22 @@ self.body(func(inputs) {
 	compression := ""
 
 	if importMode == "mtx" {
-		compression = inputSpec.domain["pl7.app/compression"]
+		compression = compressionLoaded
+		
+		if len(maps.getKeys(inputMap)) != 3 {
+			ll.panic("ERROR: Expected 3 files for MTX format, got %v", len(maps.getKeys(inputMap)))
+		}
 		
 		// Get all keys from input map and decode them
 		for sKey in maps.getKeys(inputMap) {
 			key := json.decode(sKey)
-			if len(key) == 2 {
-				role := key[1]
-				fileData := inputMap[sKey]
-				if role == "matrix.mtx" {
-					matrixFile = fileData
-				} else if role == "barcodes.tsv" {
-					barcodesFile = fileData
-				} else if role == "features.tsv" {
-					featuresFile = fileData
-				}
+
+			if key[0] == "barcodes.tsv" {
+				barcodesFile = inputMap[sKey]
+			} else if key[0] == "features.tsv" {
+				featuresFile = inputMap[sKey]
+			} else if key[0] == "matrix.mtx" {
+				matrixFile = inputMap[sKey]
 			}
 		}
 	}
@@ -143,7 +143,7 @@ self.body(func(inputs) {
 			addFile("matrix.mtx" + matrixExt, matrixFile).
 			addFile("barcodes.tsv" + barcodesExt, barcodesFile).
 			addFile("features.tsv" + featuresExt, featuresFile).
-			arg("--mtx").arg("matrix.mtx" + matrixExt).
+			arg("--matrix").arg("matrix.mtx" + matrixExt).
 			arg("--barcodes").arg("barcodes.tsv" + barcodesExt).
 			arg("--features").arg("features.tsv" + featuresExt)
 	}

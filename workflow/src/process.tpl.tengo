@@ -36,14 +36,20 @@ self.body(func(inputs) {
 
 	fileExtension := inputSpec.domain["pl7.app/fileExtension"]
 
+	// In MTX format aggregate by role axis
+	aggregate := []
+	if importMode == "mtx" {
+		aggregate = [{
+			name: "pl7.app/sc/cellRangerFileRole",
+			optional: true
+		}]
+	}
+
 	importingCountsResults := pframes.processColumn(
 		{ spec: inputSpec, data: inputData }, importCountsTpl,
 		targetOutputs.getTargetOutputs(species, blockId, inputSpec.axesSpec[0]),
 		{
-			aggregate: [{
-				name: "pl7.app/sampleId",
-				optional: true
-			}],
+			aggregate: aggregate,
 
 			traceSteps: [{type: "milaboratories.import-sc-rnaseq-data", id: blockId, importance: 20, label: "Import scRNA-seq Data"}],
 
@@ -51,7 +57,9 @@ self.body(func(inputs) {
 				species: species,
 				fileExtension: fileExtension,
 				geneFormat: geneFormat,
-				importMode: importMode			}
+				importMode: importMode,
+				compression: inputSpec.domain["pl7.app/compression"]
+			}
 			// ,
 			// metaExtra: {
 			// 	mem: inputs.params.mem,
