@@ -7,9 +7,23 @@ import scipy.sparse
 import scipy.io
 
 def clean_barcode_suffix(barcode):
-    """Remove '-' and following numbers from cell barcode."""
+    """Remove '-' and following numbers from cell barcode (for 10X Genomics format).
+    
+    Only cleans if:
+    - There's exactly one dash
+    - The suffix after the dash is purely numeric (e.g., "-1", "-2")
+    - The prefix contains only nucleotide letters (A, T, G, C, N)
+    
+    This distinguishes 10X barcodes from barcodes that use dashes as part of the identifier.
+    """
     if '-' in barcode:
-        return barcode.split('-')[0]
+        parts = barcode.split('-')
+        # Only clean if there's exactly one dash and the suffix is purely numeric
+        if len(parts) == 2 and parts[1].isdigit():
+            prefix = parts[0].upper()
+            # Check if prefix contains only nucleotide letters (A, T, G, C, N)
+            if all(c in 'ATCGN' for c in prefix):
+                return parts[0]
     return barcode
 
 def load_data_mtx(matrix_path, barcodes_path, features_path):
@@ -45,10 +59,16 @@ def load_data_mtx(matrix_path, barcodes_path, features_path):
         print("✅ Gene IDs are unique.")
 
     # Check for duplicate barcodes
-    barcode_duplicates = pd.Series(barcodes)[pd.Series(barcodes).duplicated()]
-    if not barcode_duplicates.empty:
-        print(f"⚠️ Found {barcode_duplicates.nunique()} duplicate barcodes.")
-        barcodes = pd.Series(barcodes).drop_duplicates().tolist()
+    barcode_duplicates = pd.Series(barcodes).duplicated()
+    if barcode_duplicates.any():
+        print(f"⚠️ Found {barcode_duplicates.sum()} duplicate barcodes.")
+        # Keep first occurrence of each unique barcode
+        unique_indices = ~barcode_duplicates
+        barcodes = pd.Series(barcodes)[unique_indices].tolist()
+        # Filter matrix columns to match unique barcodes
+        if matrix.shape[1] == len(unique_indices):
+            matrix = matrix[:, unique_indices]
+            print(f"Filtered matrix to {unique_indices.sum()} unique cells")
 
     # ✅ FINAL FIX: Transpose the matrix
     if matrix.shape[0] == len(features) and matrix.shape[1] == len(barcodes):
