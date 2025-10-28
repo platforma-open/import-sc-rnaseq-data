@@ -5,7 +5,8 @@ import { BlockModel, createPlDataTableStateV2, createPlDataTableV2, isPColumn, i
 export type BlockArgs = {
   datasetRef?: PlRef;
   mtxDatasetRef?: PlRef;
-  importMode: 'csv' | 'mtx';
+  h5adDatasetRef?: PlRef;
+  importMode: 'csv' | 'mtx' | 'h5ad';
   // name?: string;
 };
 
@@ -40,7 +41,7 @@ export const model = BlockModel.create()
   })
 
   .argsValid((ctx) => {
-    const { importMode, datasetRef, mtxDatasetRef } = ctx.args;
+    const { importMode, datasetRef, mtxDatasetRef, h5adDatasetRef } = ctx.args;
     if (importMode === 'csv') {
       if (datasetRef === undefined) return false;
       if (!ctx.uiState.allowRun) return false;
@@ -48,6 +49,10 @@ export const model = BlockModel.create()
 
     if (importMode === 'mtx') {
       if (mtxDatasetRef === undefined) return false;
+    }
+
+    if (importMode === 'h5ad') {
+      if (h5adDatasetRef === undefined) return false;
     }
 
     return true;
@@ -65,6 +70,20 @@ export const model = BlockModel.create()
           || domain['pl7.app/fileExtension'] === 'csv.gz'
           || domain['pl7.app/fileExtension'] === 'tsv'
           || domain['pl7.app/fileExtension'] === 'tsv.gz')
+      );
+    },
+    );
+  })
+
+  .output('h5adDatasetOptions', (ctx) => {
+    return ctx.resultPool.getOptions((v) => {
+      if (!isPColumnSpec(v)) return false;
+      const domain = v.domain;
+      return (
+        v.name === 'pl7.app/sequencing/data'
+        && (v.valueType as string) === 'File'
+        && domain !== undefined
+        && (domain['pl7.app/fileExtension'] === 'h5ad')
       );
     },
     );

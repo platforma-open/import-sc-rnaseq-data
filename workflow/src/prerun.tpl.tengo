@@ -26,6 +26,13 @@ wf.body(func(args) {
 			outputs: {},
 			exports: {}
 		}
+	} else if (importMode == "h5ad") {
+		// Skip check for H5AD format (not implemented yet)
+		// Return empty outputs - errorLog will be undefined and allowed by model
+		return {
+			outputs: {},
+			exports: {}
+		}
 	} else {
 		return {
 			outputs: {},

@@ -20,6 +20,8 @@ wf.body(func(args) {
 		input = wf.resolve(args.datasetRef, { errIfMissing: true })
 	} else if importMode == "mtx" {
 		input = wf.resolve(args.mtxDatasetRef, { errIfMissing: true })
+	} else if importMode == "h5ad" {
+		input = wf.resolve(args.h5adDatasetRef, { errIfMissing: true })
 	} else {
 		ll.panic("Unknown import mode: %v", importMode)
 	}
