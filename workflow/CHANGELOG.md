@@ -1,5 +1,11 @@
 # @platforma-open/milaboratories.import-sc-rnaseq-data.workflow
 
+## 1.2.0
+
+### Minor Changes
+
+- febbe4e: Added support for cell ranger output files.
+
 ## 1.1.3
 
 ### Patch Changes
