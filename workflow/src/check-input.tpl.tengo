@@ -3,7 +3,6 @@ exec := import("@platforma-sdk/workflow-tengo:exec")
 assets := import("@platforma-sdk/workflow-tengo:assets")
 pData := import("@platforma-sdk/workflow-tengo:pframes.data")
 maps := import("@platforma-sdk/workflow-tengo:maps")
-ll := import("@platforma-sdk/workflow-tengo:ll")
 pt := import("@platforma-sdk/workflow-tengo:pt")
 xsv := import("@platforma-sdk/workflow-tengo:pframes.xsv")
 pframes := import("@platforma-sdk/workflow-tengo:pframes")
@@ -19,6 +18,7 @@ self.body(func(inputs) {
 	defaultConvMem := "16GiB"
 	defaultConvCpu := 1
 
+	// CSV format: run the check (MTX format is skipped in prerun)
 	parsedData := pData.parseData(inputData, { expectedKeyLength: 1 })
 	sampleKeys := maps.getKeys(parsedData.data)
 

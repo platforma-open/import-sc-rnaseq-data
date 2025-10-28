@@ -4,6 +4,8 @@ import { BlockModel, createPlDataTableStateV2, createPlDataTableV2, isPColumn, i
 
 export type BlockArgs = {
   datasetRef?: PlRef;
+  mtxDatasetRef?: PlRef;
+  importMode: 'csv' | 'mtx';
   // name?: string;
 };
 
@@ -17,7 +19,9 @@ export type UiState = {
 
 export const model = BlockModel.create()
 
-  .withArgs<BlockArgs>({})
+  .withArgs<BlockArgs>({
+    importMode: 'csv',
+  })
 
   .withUiState<UiState>({
     tableState: createPlDataTableStateV2(),
@@ -36,9 +40,15 @@ export const model = BlockModel.create()
   })
 
   .argsValid((ctx) => {
-    const { datasetRef } = ctx.args;
-    if (datasetRef === undefined) return false;
-    if (!ctx.uiState.allowRun) return false;
+    const { importMode, datasetRef, mtxDatasetRef } = ctx.args;
+    if (importMode === 'csv') {
+      if (datasetRef === undefined) return false;
+      if (!ctx.uiState.allowRun) return false;
+    }
+
+    if (importMode === 'mtx') {
+      if (mtxDatasetRef === undefined) return false;
+    }
 
     return true;
   })
@@ -55,6 +65,20 @@ export const model = BlockModel.create()
           || domain['pl7.app/fileExtension'] === 'csv.gz'
           || domain['pl7.app/fileExtension'] === 'tsv'
           || domain['pl7.app/fileExtension'] === 'tsv.gz')
+      );
+    },
+    );
+  })
+
+  .output('mtxDatasetOptions', (ctx) => {
+    return ctx.resultPool.getOptions((v) => {
+      if (!isPColumnSpec(v)) return false;
+      // Check if it has the cellRangerFileRole axis
+      const hasRoleAxis = v.axesSpec?.some((axis) => axis.name === 'pl7.app/sc/cellRangerFileRole');
+      return (
+        v.name === 'pl7.app/sequencing/data'
+        && (v.valueType as string) === 'File'
+        && hasRoleAxis
       );
     },
     );

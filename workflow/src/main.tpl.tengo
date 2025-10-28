@@ -1,9 +1,9 @@
 wf := import("@platforma-sdk/workflow-tengo:workflow")
-exec := import("@platforma-sdk/workflow-tengo:exec")
-assets:= import("@platforma-sdk/workflow-tengo:assets")
+assets := import("@platforma-sdk/workflow-tengo:assets")
 render := import("@platforma-sdk/workflow-tengo:render")
 smart := import("@platforma-sdk/workflow-tengo:smart")
 pframes := import("@platforma-sdk/workflow-tengo:pframes")
+ll := import("@platforma-sdk/workflow-tengo:ll")
 
 processTpl := assets.importTemplate(":process")
 inferSpeciesTpl := assets.importTemplate(":infer-species")
@@ -11,14 +11,24 @@ inferSpeciesTpl := assets.importTemplate(":infer-species")
 wf.setPreRun(assets.importTemplate(":prerun"))
 
 wf.body(func(args) {
-
-	input := wf.resolve(args.datasetRef, { errIfMissing: true })
+	importMode := string(args.importMode)
 	blockId := wf.getBlockId()
+
+	// Resolve the correct input based on import mode
+	input := undefined
+	if importMode == "csv" {
+		input = wf.resolve(args.datasetRef, { errIfMissing: true })
+	} else if importMode == "mtx" {
+		input = wf.resolve(args.mtxDatasetRef, { errIfMissing: true })
+	} else {
+		ll.panic("Unknown import mode: %v", importMode)
+	}
 
 	// First infer species
 	inferSpeciesRun := render.createEphemeral(inferSpeciesTpl, {
 		input: input.getFutureInputField("data"),
-		inputSpec: input.getFutureInputField("spec")
+		inputSpec: input.getFutureInputField("spec"),
+		importMode: importMode
 	})
 
 	processRun := render.createEphemeral(processTpl, {
@@ -26,6 +36,7 @@ wf.body(func(args) {
 		inputData: input.getFutureInputField("data"),
 		species: inferSpeciesRun.output("species"),
 		geneFormat: inferSpeciesRun.output("geneFormat"),
+		importMode: importMode,
 
 		params: smart.createJsonResource({
 			blockId: blockId

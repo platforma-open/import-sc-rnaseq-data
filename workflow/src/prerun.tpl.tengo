@@ -1,25 +1,37 @@
 // pre-run
 
 wf := import("@platforma-sdk/workflow-tengo:workflow")
-maps := import("@platforma-sdk/workflow-tengo:maps")
 render := import("@platforma-sdk/workflow-tengo:render")
-ll := import("@platforma-sdk/workflow-tengo:ll")
-smart := import("@platforma-sdk/workflow-tengo:smart")
 assets := import("@platforma-sdk/workflow-tengo:assets")
-file := import("@platforma-sdk/workflow-tengo:file")
 
 checkFormatTpl := assets.importTemplate(":check-input")
 
 wf.body(func(args) {
+	importMode := string(args.importMode)
 
-	if args.datasetRef == undefined {
+	// Resolve the correct input based on import mode
+	input := undefined
+	if importMode == "csv" {
+		if args.datasetRef == undefined {
+			return {
+				outputs: {},
+				exports: {}
+			}
+		}
+		input = wf.resolve(args.datasetRef, { errIfMissing: true })
+	} else if importMode == "mtx" {
+		// Skip check for MTX format (not implemented yet)
+		// Return empty outputs - errorLog will be undefined and allowed by model
+		return {
+			outputs: {},
+			exports: {}
+		}
+	} else {
 		return {
 			outputs: {},
 			exports: {}
 		}
 	}
-
-	input := wf.resolve(args.datasetRef, { errIfMissing: true })
 
 	checkFormat := render.create(checkFormatTpl, {
 		input: input.getFutureInputField("data"),

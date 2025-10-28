@@ -1,15 +1,11 @@
 self := import("@platforma-sdk/workflow-tengo:tpl")
 
 json := import("json")
-path := import("@platforma-sdk/workflow-tengo:path")
-
 ll := import("@platforma-sdk/workflow-tengo:ll")
 exec := import("@platforma-sdk/workflow-tengo:exec")
-file := import("@platforma-sdk/workflow-tengo:file")
 assets := import("@platforma-sdk/workflow-tengo:assets")
 maps := import("@platforma-sdk/workflow-tengo:maps")
 pConstants := import("@platforma-sdk/workflow-tengo:pframes.constants")
-pData := import("@platforma-sdk/workflow-tengo:pframes.data")
 
 geneMap := import(":libs.gene-map")
 
@@ -23,21 +19,47 @@ self.defineOutputs(
 
 self.body(func(inputs) {
 	inputData := inputs[pConstants.VALUE_FIELD_NAME]
+	compressionLoaded := inputs.compression
 	species := inputs.species
 	fileExtension := inputs.fileExtension
 	geneFormat := inputs.geneFormat
+	importMode := string(inputs.importMode)
 
-	// @TODO: Discover way the key value here is an empty element or a blanc space [ ]
-	// @TODO: Fix to support multiple files per sample (mtx files)
-	parsedData := pData.parseData(inputData, { expectedKeyLength: 1 })
-	firstKey := maps.getKeys(parsedData.data)[0]
-	uniqueSampleData := parsedData.data[firstKey]
+	inputDataMeta := inputData.getDataAsJson()
 
 	fileFormat := ""
-	if fileExtension == "csv" || fileExtension == "csv.gz" || fileExtension == "tsv" || fileExtension == "tsv.gz" {
-		fileFormat = "xsv"
-	} else if fileExtension == "mtx" || fileExtension == "mtx.gz" {
+	if importMode == "mtx" {
 		fileFormat = "mtx"
+	} else {
+		fileFormat = "xsv"
+	}
+
+	inputMap := inputData.inputs()
+
+	matrixFile := undefined
+	barcodesFile := undefined
+	featuresFile := undefined
+	compression := ""
+
+	if importMode == "mtx" {
+		compression = compressionLoaded
+		
+		if len(maps.getKeys(inputMap)) != 3 {
+			ll.panic("ERROR: Expected 3 files for MTX format, got %v", len(maps.getKeys(inputMap)))
+		}
+		
+		// Get all keys from input map and decode them
+		for sKey in maps.getKeys(inputMap) {
+			key := json.decode(sKey)
+
+			if key[0] == "barcodes.tsv" {
+				barcodesFile = inputMap[sKey]
+			} else if key[0] == "features.tsv" {
+				featuresFile = inputMap[sKey]
+			} else if key[0] == "matrix.mtx" {
+				matrixFile = inputMap[sKey]
+			}
+		}
 	}
 
 	geneAsset := geneMap.getGeneAsset(species)
@@ -51,30 +73,37 @@ self.body(func(inputs) {
 		software(assets.importSoftware("@platforma-open/milaboratories.import-sc-rnaseq-data.software:counts-csv")).
 		mem(mem).
 		cpu(cpu).
-		arg("--format")
+		arg("--format").arg(fileFormat)
 
 	if fileFormat == "xsv" {
+		// CSV format: get first sample
+		firstKey := maps.getKeys(inputMap)[0]
+		uniqueSampleData := inputMap[firstKey]
+		
 		countMatrixCsv = countMatrixCsv.
-		addFile("inputCounts." + fileExtension, uniqueSampleData).
-		arg("xsv").
-		arg("--xsv").arg("inputCounts." + fileExtension).
-		arg("--gene-format").arg(geneFormat)
+			addFile("inputCounts." + fileExtension, uniqueSampleData).
+			arg("--xsv").arg("inputCounts." + fileExtension).
+			arg("--gene-format").arg(geneFormat)
 
 		if geneFormat == "gene symbol" {
 			countMatrixCsv = countMatrixCsv.
-			addAsset(geneAsset, ".", geneAssetName).
-			arg("--annotation").arg(geneAssetName)
+				addAsset(geneAsset, ".", geneAssetName).
+				arg("--annotation").arg(geneAssetName)
 		}
 
-	} else if fileFormat == "mtx" { // placeholder
+	} else if fileFormat == "mtx" {
+		// MTX format: use files extracted earlier
+		matrixExt := compression == "gz" ? ".gz" : ""
+		barcodesExt := compression == "gz" ? ".gz" : ""
+		featuresExt := compression == "gz" ? ".gz" : ""
+		
 		countMatrixCsv = countMatrixCsv.
-		addFile("matrix.mtx.gz", inputData). // placeholder
-		addFile("barcodes.tsv.gz", inputData). // placeholder
-		addFile("features.tsv.gz", inputData). // placeholder
-		arg("mtx").
-		arg("--matrix").arg("matrix.mtx.gz").
-		arg("--barcodes").arg("barcodes.tsv.gz").
-		arg("--features").arg("features.tsv.gz")
+			addFile("matrix.mtx" + matrixExt, matrixFile).
+			addFile("barcodes.tsv" + barcodesExt, barcodesFile).
+			addFile("features.tsv" + featuresExt, featuresFile).
+			arg("--matrix").arg("matrix.mtx" + matrixExt).
+			arg("--barcodes").arg("barcodes.tsv" + barcodesExt).
+			arg("--features").arg("features.tsv" + featuresExt)
 	} else if fileFormat == "" {
 		ll.panic("ERROR: Unsupported file format: %v", fileExtension)
 	}
@@ -100,18 +129,23 @@ self.body(func(inputs) {
 
 	if fileFormat == "xsv" {
 		cellMetricsCsv = cellMetricsCsv.
-		arg("--format").arg("csv").
-		addFile("rawCounts.csv", rawCounts).
-		arg("--csv").arg("rawCounts.csv")
+			arg("--format").arg("csv").
+			addFile("rawCounts.csv", rawCounts).
+			arg("--csv").arg("rawCounts.csv")
 	} else if fileFormat == "mtx" {
+		// MTX format: use files extracted earlier
+		matrixExt := compression == "gz" ? ".gz" : ""
+		barcodesExt := compression == "gz" ? ".gz" : ""
+		featuresExt := compression == "gz" ? ".gz" : ""
+		
 		cellMetricsCsv = cellMetricsCsv.
-		arg("--format").arg(fileFormat).
-		addFile("matrix.mtx.gz", inputData). // @TODO: how to add mtx files
-		addFile("barcodes.tsv.gz", inputData). // @TODO: how to add mtx files
-		addFile("features.tsv.gz", rawCounts). // @TODO: how to add mtx files
-		arg("--mtx").arg("matrix.mtx.gz").
-		arg("--barcodes").arg("barcodes.tsv.gz").
-		arg("--features").arg("features.tsv.gz")
+			arg("--format").arg(fileFormat).
+			addFile("matrix.mtx" + matrixExt, matrixFile).
+			addFile("barcodes.tsv" + barcodesExt, barcodesFile).
+			addFile("features.tsv" + featuresExt, featuresFile).
+			arg("--matrix").arg("matrix.mtx" + matrixExt).
+			arg("--barcodes").arg("barcodes.tsv" + barcodesExt).
+			arg("--features").arg("features.tsv" + featuresExt)
 	}
 		
 	cellMetricsCsv = cellMetricsCsv.

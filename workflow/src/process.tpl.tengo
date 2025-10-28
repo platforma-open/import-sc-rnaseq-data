@@ -29,24 +29,36 @@ self.body(func(inputs) {
 	blockId := inputs.params.blockId
 	species := string(inputs.species.getData())
 	geneFormat := string(inputs.geneFormat.getData())
+	importMode := string(inputs.importMode)
 
 	inputSpec := inputs.inputSpec
 	inputData := inputs.inputData
 
 	fileExtension := inputSpec.domain["pl7.app/fileExtension"]
 
+	// In MTX format aggregate by role axis
+	aggregate := []
+	if importMode == "mtx" {
+		aggregate = [{
+			name: "pl7.app/sc/cellRangerFileRole",
+			optional: true
+		}]
+	}
+
 	importingCountsResults := pframes.processColumn(
 		{ spec: inputSpec, data: inputData }, importCountsTpl,
 		targetOutputs.getTargetOutputs(species, blockId, inputSpec.axesSpec[0]),
 		{
-			aggregate: [],
+			aggregate: aggregate,
 
 			traceSteps: [{type: "milaboratories.import-sc-rnaseq-data", id: blockId, importance: 20, label: "Import scRNA-seq Data"}],
 
 			extra: {
 				species: species,
 				fileExtension: fileExtension,
-				geneFormat: geneFormat
+				geneFormat: geneFormat,
+				importMode: importMode,
+				compression: inputSpec.domain["pl7.app/compression"]
 			}
 			// ,
 			// metaExtra: {

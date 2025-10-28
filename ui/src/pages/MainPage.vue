@@ -5,6 +5,7 @@ import {
   PlAlert,
   PlBlockPage,
   PlBtnGhost,
+  PlBtnGroup,
   PlDropdownRef,
   PlMaskIcon24,
   PlSlideModal,
@@ -28,6 +29,12 @@ const setDataset = (datasetRef: PlRef | undefined) => {
   app.model.args.datasetRef = datasetRef;
   if (datasetRef)
     app.model.ui.title = 'Import GEX Data - ' + app.model.outputs.datasetOptions?.find((o) => plRefsEqual(o.ref, datasetRef))?.label;
+};
+
+const setMtxDataset = (mtxDatasetRef: PlRef | undefined) => {
+  app.model.args.mtxDatasetRef = mtxDatasetRef;
+  if (mtxDatasetRef)
+    app.model.ui.title = 'Import GEX Data - ' + app.model.outputs.mtxDatasetOptions?.find((o) => plRefsEqual(o.ref, mtxDatasetRef))?.label;
 };
 
 const tableSettings = usePlDataTableSettingsV2({
@@ -81,14 +88,39 @@ const errorLogs = useWatchFetch(() => app.model.outputs.errorLog, async (pframeH
 
     <PlSlideModal :model-value="app.model.ui.settingsOpen" @update:model-value="onModalUpdate">
       <template #title>Settings</template>
-      <PlDropdownRef
-        v-model="app.model.args.datasetRef"
-        :options="app.model.outputs.datasetOptions"
-        label="Select dataset"
-        clearable
-        required
-        @update:model-value="setDataset"
+
+      <PlBtnGroup
+        v-model="app.model.args.importMode"
+        :options="[
+          { value: 'csv', label: 'From CSV' },
+          { value: 'mtx', label: 'From MTX' },
+        ]"
+        label="Importing format"
+        tooltip="Select the input format for the gene expression data. Can be either a CSV/TSV file or matrix, barcodes and genes files."
       />
+
+      <template v-if="app.model.args.importMode === 'csv'">
+        <PlDropdownRef
+          v-model="app.model.args.datasetRef"
+          :options="app.model.outputs.datasetOptions"
+          label="Select dataset"
+          clearable
+          required
+          @update:model-value="setDataset"
+        />
+      </template>
+
+      <template v-if="app.model.args.importMode === 'mtx'">
+        <PlDropdownRef
+          v-model="app.model.args.mtxDatasetRef"
+          :options="app.model.outputs.mtxDatasetOptions"
+          label="Select MTX dataset"
+          clearable
+          required
+          @update:model-value="setMtxDataset"
+        />
+      </template>
+
       <PlAlert v-if="errorLogs.value !== undefined" type="warn" icon>
         {{ errorLogs.value }}
       </PlAlert>
@@ -99,3 +131,6 @@ const errorLogs = useWatchFetch(() => app.model.outputs.errorLog, async (pframeH
     <PlAgDataTableV2 v-model="app.model.ui.tableState" :settings="tableSettings" show-export-button />
   </PlBlockPage>
 </template>
+
+<style scoped>
+</style>

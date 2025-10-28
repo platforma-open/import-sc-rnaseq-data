@@ -12,9 +12,23 @@ def read_gzip_tsv(file_path):
         return pd.read_csv(f, sep='\t', header=None)
 
 def clean_barcode_suffix(barcode):
-    """Remove '-' and following numbers from cell barcode."""
+    """Remove '-' and following numbers from cell barcode (for 10X Genomics format).
+    
+    Only cleans if:
+    - There's exactly one dash
+    - The suffix after the dash is purely numeric (e.g., "-1", "-2")
+    - The prefix contains only nucleotide letters (A, T, G, C, N)
+    
+    This distinguishes 10X barcodes from barcodes that use dashes as part of the identifier.
+    """
     if '-' in barcode:
-        return barcode.split('-')[0]
+        parts = barcode.split('-')
+        # Only clean if there's exactly one dash and the suffix is purely numeric
+        if len(parts) == 2 and parts[1].isdigit():
+            prefix = parts[0].upper()
+            # Check if prefix contains only nucleotide letters (A, T, G, C, N)
+            if all(c in 'ATCGN' for c in prefix):
+                return parts[0]
     return barcode
 
 def process_input_files(matrix_path, barcodes_path, features_path, output_csv_path):
