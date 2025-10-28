@@ -20,6 +20,7 @@ import random
 from pathlib import Path
 from typing import List, Tuple, Optional, Dict, Set
 import polars as pl
+import scanpy as sc
 
 
 class SpeciesInferenceError(Exception):
@@ -730,6 +731,67 @@ def infer_species_from_mtx(features_file: str) -> str:
         raise SpeciesInferenceError(f"Error inferring species from MTX features file: {e}")
 
 
+def infer_species_from_h5ad(input_file: str) -> str:
+    """
+    Infer species from an AnnData h5ad file.
+    
+    Args:
+        input_file: Path to the .h5ad file
+        
+    Returns:
+        Inferred species name
+    """
+    try:
+        # Load the h5ad file
+        adata = sc.read_h5ad(input_file)
+        
+        # Extract gene identifiers from var_names (genes)
+        gene_identifiers = list(adata.var_names)
+        
+        if not gene_identifiers:
+            raise SpeciesInferenceError("No gene identifiers found in the h5ad file")
+        
+        # Analyze gene identifiers to infer species
+        gene_analyzer = GeneIdentifierAnalyzer()
+        species_scores = gene_analyzer.analyze_identifiers(gene_identifiers)
+        
+        if not species_scores:
+            raise SpeciesInferenceError("Could not infer species from gene identifiers")
+        
+        # Get the species with the highest score
+        max_score = max(species_scores.values())
+        best_candidates = [species for species, score in species_scores.items() if score == max_score]
+        
+        # Tie-breaking priority
+        tie_breaker_priority = ['yeast', 'worm', 'arabidopsis', 'fly', 'zebrafish', 'rat', 'mouse', 'chicken', 'cow', 'pig', 'human']
+        
+        best_species = best_candidates[0]
+        for priority_species in tie_breaker_priority:
+            if priority_species in best_candidates:
+                best_species = priority_species
+                break
+        
+        # Convert to standard format
+        species_mapping = {
+            'human': 'homo-sapiens',
+            'mouse': 'mus-musculus',
+            'rat': 'rattus-norvegicus',
+            'zebrafish': 'danio-rerio',
+            'fly': 'drosophila-melanogaster',
+            'worm': 'caenorhabditis-elegans',
+            'yeast': 'saccharomyces-cerevisiae',
+            'arabidopsis': 'arabidopsis-thaliana',
+            'chicken': 'gallus-gallus',
+            'cow': 'bos-taurus',
+            'pig': 'sus-scrofa'
+        }
+        
+        return species_mapping.get(best_species, best_species)
+        
+    except Exception as e:
+        raise SpeciesInferenceError(f"Error inferring species from h5ad file: {e}")
+
+
 def infer_species(input_file: str) -> str:
     """
     Main function to infer species from a count matrix file.
@@ -797,23 +859,24 @@ def main():
         description="Infer species from single-cell RNA-seq count matrix",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
-Examples:
+        Examples:
     python infer_species.py data.csv --format csv
     python infer_species.py data.tsv --format csv
     python infer_species.py features.tsv.gz --format mtx
+    python infer_species.py data.h5ad --format h5ad
         """
     )
     
     parser.add_argument(
         'input_file',
-        help='Path to the input file (CSV/TSV for csv format, TSV for mtx format)'
+        help='Path to the input file (CSV/TSV for csv format, TSV for mtx format, h5ad for h5ad format)'
     )
     
     parser.add_argument(
         '--format', '-f',
-        choices=['csv', 'mtx'],
+        choices=['csv', 'mtx', 'h5ad'],
         default='csv',
-        help='Input format: csv for count matrix files, mtx for 10X Genomics features file (default: csv)'
+        help='Input format: csv for count matrix files, mtx for 10X Genomics features file, h5ad for AnnData files (default: csv)'
     )
     
     parser.add_argument(
@@ -849,6 +912,23 @@ Examples:
             
             # For MTX format, we know it's Ensembl IDs from the features file
             gene_format = 'Ensembl Id'
+            
+        elif args.format == 'h5ad':
+            species = infer_species_from_h5ad(args.input_file)
+            
+            # Detect gene format from h5ad file
+            adata = sc.read_h5ad(args.input_file)
+            gene_identifiers = list(adata.var_names)
+            
+            gene_analyzer = GeneIdentifierAnalyzer()
+            gene_analyzer.analyze_identifiers(gene_identifiers)
+            
+            format_mapping = {
+                'symbol': 'gene symbol',
+                'ensembl': 'Ensembl Id',
+                'entrez': 'Entrez Id'
+            }
+            gene_format = format_mapping.get(gene_analyzer.identifier_type, 'unknown')
         
         # Write species output
         output_path = Path(args.output)
