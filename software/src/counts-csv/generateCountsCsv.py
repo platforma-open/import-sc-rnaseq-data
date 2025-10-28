@@ -317,16 +317,100 @@ def process_csv_file(csv_path, output_csv_path, gene_format=None, annotation_pat
     
     print("Done!")
 
+def process_h5ad_file(h5ad_path, output_csv_path):
+    """Process an AnnData h5ad file and convert to long format CSV."""
+    print(f"Loading h5ad file: {h5ad_path}")
+    
+    # Load the h5ad file
+    adata = sc.read_h5ad(h5ad_path)
+    
+    print(f"AnnData shape: {adata.shape} (cells × genes)")
+    
+    # Extract gene and cell identifiers
+    gene_names = list(adata.var_names)
+    cell_names = list(adata.obs_names)
+    
+    # Clean cell barcodes if needed
+    cleaned_cell_names = [clean_barcode_suffix(cell) for cell in cell_names]
+    if any(c != o for c, o in zip(cleaned_cell_names, cell_names)):
+        print(f"Cleaned barcode suffixes. Example: {cell_names[0]} -> {cleaned_cell_names[0]}")
+    
+    # Get the count matrix
+    X = adata.X
+    
+    # Convert to long format for raw counts
+    print(f"Processing {X.shape[0]} cells × {X.shape[1]} genes...")
+    raw_data = []
+    
+    if hasattr(X, 'tocoo'):
+        # Sparse matrix
+        for i, j, value in zip(X.tocoo().row, X.tocoo().col, X.tocoo().data):
+            if value > 0:
+                raw_data.append([cleaned_cell_names[i], gene_names[j], value])
+    else:
+        # Dense matrix
+        for i, cell in enumerate(cleaned_cell_names):
+            for j, gene in enumerate(gene_names):
+                value = X[i, j]
+                if value > 0:
+                    raw_data.append([cell, gene, value])
+    
+    print(f"Total non-zero entries: {len(raw_data)}")
+    df_raw = pd.DataFrame(raw_data, columns=["CellId", "GeneId", "Count"])
+    
+    # Check for and handle duplicate CellId-GeneId combinations
+    df_raw = handle_duplicate_combinations(df_raw)
+    
+    print(f"Writing raw count matrix to {output_csv_path}...")
+    df_raw.to_csv(output_csv_path, index=False)
+    
+    # Normalize counts
+    print("Normalizing counts...")
+    
+    # Create a copy of adata for normalization
+    adata_norm = adata.copy()
+    sc.pp.normalize_total(adata_norm, target_sum=1e4)
+    
+    # Extract normalized counts
+    X_norm = adata_norm.X
+    norm_data = []
+    
+    if hasattr(X_norm, 'tocoo'):
+        # Sparse matrix
+        for i, j, value in zip(X_norm.tocoo().row, X_norm.tocoo().col, X_norm.tocoo().data):
+            if value > 0:
+                norm_data.append([cleaned_cell_names[i], gene_names[j], value])
+    else:
+        # Dense matrix
+        for i, cell in enumerate(cleaned_cell_names):
+            for j, gene in enumerate(gene_names):
+                value = X_norm[i, j]
+                if value > 0:
+                    norm_data.append([cell, gene, value])
+    
+    norm_df = pd.DataFrame(norm_data, columns=["CellId", "GeneId", "NormalizedCount"])
+    
+    # Check for and handle duplicate CellId-GeneId combinations in normalized data
+    norm_df = handle_duplicate_combinations_normalized(norm_df)
+    
+    normalized_output_csv_path = output_csv_path.replace(".csv", "_normalized.csv")
+    
+    print(f"Writing normalized count matrix to {normalized_output_csv_path}...")
+    norm_df.to_csv(normalized_output_csv_path, index=False)
+    
+    print("Done!")
+
 def main():
     parser = argparse.ArgumentParser(description="Convert .mtx.gz, .tsv.gz files or CSV files into a count matrix CSV.")
-    parser.add_argument('--format', required=True, choices=['mtx', 'xsv'], 
-                       help="Input format: 'mtx' for 10X Genomics format, 'xsv' for CSV/TSV format")
+    parser.add_argument('--format', required=True, choices=['mtx', 'xsv', 'h5ad'], 
+                       help="Input format: 'mtx' for 10X Genomics format, 'xsv' for CSV/TSV format, 'h5ad' for AnnData format")
     parser.add_argument('--matrix', help="Path to the matrix.mtx.gz file (required for mtx format)")
     parser.add_argument('--barcodes', help="Path to the barcodes.tsv.gz file (required for mtx format)")
     parser.add_argument('--features', help="Path to the features.tsv.gz file (required for mtx format)")
-    parser.add_argument('--xsv', help="Path to the XSV file (required for csv format)")
+    parser.add_argument('--xsv', help="Path to the XSV file (required for xsv format)")
+    parser.add_argument('--h5ad', help="Path to the h5ad file (required for h5ad format)")
     parser.add_argument('--gene-format', choices=['gene symbol', 'Ensembl Id'], 
-                       help="Gene identifier format: 'gene symbol' or 'Ensembl Id' (for csv format only)")
+                       help="Gene identifier format: 'gene symbol' or 'Ensembl Id' (for xsv format only)")
     parser.add_argument('--annotation', help="Path to gene annotation CSV file (required when --gene-format is 'gene symbol')")
     parser.add_argument('--output', required=True, help="Path to output the raw CSV file")
 
@@ -338,10 +422,14 @@ def main():
         process_input_files(args.matrix, args.barcodes, args.features, args.output)
     elif args.format == 'xsv':
         if not args.xsv:
-            parser.error("For csv/tsv format, --xsv is required")
+            parser.error("For xsv format, --xsv is required")
         if args.gene_format == 'gene symbol' and not args.annotation:
             parser.error("For gene format 'gene symbol', --annotation is required")
         process_csv_file(args.xsv, args.output, args.gene_format, args.annotation)
+    elif args.format == 'h5ad':
+        if not args.h5ad:
+            parser.error("For h5ad format, --h5ad is required")
+        process_h5ad_file(args.h5ad, args.output)
 
 if __name__ == "__main__":
     main()

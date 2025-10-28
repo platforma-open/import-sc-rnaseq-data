@@ -30,6 +30,8 @@ self.body(func(inputs) {
 	fileFormat := ""
 	if importMode == "mtx" {
 		fileFormat = "mtx"
+	} else if (importMode == "h5ad") {
+		fileFormat = "h5ad"
 	} else {
 		fileFormat = "xsv"
 	}
@@ -91,6 +93,15 @@ self.body(func(inputs) {
 				arg("--annotation").arg(geneAssetName)
 		}
 
+	} else if fileFormat == "h5ad" {
+		// H5AD format: get first sample
+		firstKey := maps.getKeys(inputMap)[0]
+		uniqueSampleData := inputMap[firstKey]
+
+		countMatrixCsv = countMatrixCsv.
+			addFile("inputCounts." + fileExtension, uniqueSampleData).
+			arg("--h5ad").arg("inputCounts." + fileExtension)
+
 	} else if fileFormat == "mtx" {
 		// MTX format: use files extracted earlier
 		matrixExt := compression == "gz" ? ".gz" : ""
@@ -132,6 +143,14 @@ self.body(func(inputs) {
 			arg("--format").arg("csv").
 			addFile("rawCounts.csv", rawCounts).
 			arg("--csv").arg("rawCounts.csv")
+	} else if fileFormat == "h5ad" {
+		// H5AD format: get first sample
+		firstKey := maps.getKeys(inputMap)[0]
+		uniqueSampleData := inputMap[firstKey]
+		cellMetricsCsv = cellMetricsCsv.
+			arg("--format").arg("h5ad").
+			addFile("inputCounts." + fileExtension, uniqueSampleData).
+			arg("--h5ad").arg("inputCounts." + fileExtension)
 	} else if fileFormat == "mtx" {
 		// MTX format: use files extracted earlier
 		matrixExt := compression == "gz" ? ".gz" : ""

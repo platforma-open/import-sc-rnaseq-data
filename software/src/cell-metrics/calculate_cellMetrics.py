@@ -135,6 +135,31 @@ def load_data_csv(csv_path):
     
     return adata
 
+def load_data_h5ad(h5ad_path):
+    """Load data from AnnData h5ad file."""
+    print(f"Loading h5ad file: {h5ad_path}")
+    
+    # Load the h5ad file
+    adata = sc.read_h5ad(h5ad_path)
+    
+    print(f"AnnData shape: {adata.shape[0]} cells × {adata.shape[1]} genes")
+    
+    # Clean cell barcodes if needed
+    original_barcodes = list(adata.obs_names)
+    cleaned_barcodes = [clean_barcode_suffix(b) for b in original_barcodes]
+    
+    if cleaned_barcodes != original_barcodes:
+        print("Cleaning barcode suffixes...")
+        adata.obs_names = cleaned_barcodes
+        print(f"Example: {original_barcodes[0]} -> {cleaned_barcodes[0]}")
+    
+    # Check for gene_symbol in var
+    if 'gene_symbol' not in adata.var.columns:
+        # Use var_names as gene_symbol if not present
+        adata.var['gene_symbol'] = adata.var_names
+    
+    return adata
+
 def calculate_metrics(adata):
     """ Calculate basic QC metrics """
     sc.pp.calculate_qc_metrics(adata, percent_top=[20], log1p=False, inplace=True)
@@ -194,12 +219,13 @@ def get_mito_prefix(species):
 
 def main():
     parser = argparse.ArgumentParser(description='Calculate QC metrics for scRNA-seq data.')
-    parser.add_argument('--format', required=True, choices=['mtx', 'csv'], 
-                       help="Input format: 'mtx' for 10X Genomics format, 'csv' for long format CSV")
+    parser.add_argument('--format', required=True, choices=['mtx', 'csv', 'h5ad'], 
+                       help="Input format: 'mtx' for 10X Genomics format, 'csv' for long format CSV, 'h5ad' for AnnData format")
     parser.add_argument('--matrix', help='Path to matrix.mtx.gz file (required for mtx format)')
     parser.add_argument('--barcodes', help='Path to barcodes.tsv.gz file (required for mtx format)')
     parser.add_argument('--features', help='Path to features.tsv.gz file (required for mtx format)')
     parser.add_argument('--csv', help='Path to long format CSV file (required for csv format)')
+    parser.add_argument('--h5ad', help='Path to h5ad file (required for h5ad format)')
     parser.add_argument('--species', type=str, required=True, help='Species (e.g., homo-sapiens)')
     parser.add_argument('--output', type=str, required=True, help='Output directory')
 
@@ -214,6 +240,10 @@ def main():
         if not args.csv:
             parser.error("For csv format, --csv is required")
         adata = load_data_csv(args.csv)
+    elif args.format == 'h5ad':
+        if not args.h5ad:
+            parser.error("For h5ad format, --h5ad is required")
+        adata = load_data_h5ad(args.h5ad)
 
     # Calculate QC metrics
     calculate_metrics(adata)
