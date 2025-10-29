@@ -1,5 +1,11 @@
 # @platforma-open/milaboratories.import-sc-rnaseq-data.software
 
+## 1.3.0
+
+### Minor Changes
+
+- c281e5a: Fixed script compatibility with other OS
+
 ## 1.2.0
 
 ### Minor Changes
