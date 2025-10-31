@@ -125,7 +125,7 @@ getColumns := func(blockId, species, inputSpec) {
         }
       }
       ],
-    "storageFormat": "Binary",
+    "storageFormat": "Parquet",
     "partitionKeyLength": 0
   }
 }

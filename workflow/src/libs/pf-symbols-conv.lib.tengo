@@ -34,7 +34,7 @@ getColumns := func(species) {
         }
       }
       ],
-    "storageFormat": "Binary",
+    "storageFormat": "Parquet",
     "partitionKeyLength": 0
   }
 }
