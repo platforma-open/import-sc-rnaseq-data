@@ -52,16 +52,16 @@ class CountMatrixAnalyzer:
         
         # Determine file format
         if self.file_path.suffix.lower() == '.csv':
-            self.df = pl.read_csv(self.file_path, has_header=True, n_rows=100)
+            self.df = pl.read_csv(self.file_path, has_header=True, n_rows=10)
         elif self.file_path.suffix.lower() in ['.tsv', '.txt']:
-            self.df = pl.read_csv(self.file_path, separator='\t', has_header=True, n_rows=100)
+            self.df = pl.read_csv(self.file_path, separator='\t', has_header=True, n_rows=10)
         else:
             # Try CSV first, then TSV
             try:
-                self.df = pl.read_csv(self.file_path, has_header=True, n_rows=100)
+                self.df = pl.read_csv(self.file_path, has_header=True, n_rows=10)
             except Exception:
                 try:
-                    self.df = pl.read_csv(self.file_path, separator='\t', has_header=True, n_rows=100)
+                    self.df = pl.read_csv(self.file_path, separator='\t', has_header=True, n_rows=10)
                 except Exception as e:
                     raise FileFormatError(f"2\tCould not read one of the provided files: {e}. File format different from CSV or TSV")
     
