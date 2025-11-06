@@ -7,23 +7,48 @@ ll := import("@platforma-sdk/workflow-tengo:ll")
 
 processTpl := assets.importTemplate(":process")
 inferSpeciesTpl := assets.importTemplate(":infer-species")
+splitH5adTpl := assets.importTemplate(":split-h5ad")
 
-wf.setPreRun(assets.importTemplate(":prerun"))
+// wf.setPreRun(assets.importTemplate(":prerun"))
 
 wf.body(func(args) {
 	importMode := string(args.importMode)
 	blockId := wf.getBlockId()
 
 	// Resolve the correct input based on import mode
-	input := undefined
+	rawInput := undefined
 	if importMode == "csv" {
-		input = wf.resolve(args.datasetRef, { errIfMissing: true })
+		rawInput = wf.resolve(args.datasetRef, { errIfMissing: true })
 	} else if importMode == "mtx" {
-		input = wf.resolve(args.mtxDatasetRef, { errIfMissing: true })
+		rawInput = wf.resolve(args.mtxDatasetRef, { errIfMissing: true })
 	} else if importMode == "h5ad" {
-		input = wf.resolve(args.h5adDatasetRef, { errIfMissing: true })
+		rawInput = wf.resolve(args.h5adDatasetRef, { errIfMissing: true })
 	} else {
 		ll.panic("Unknown import mode: %v", importMode)
+	}
+
+	input := rawInput
+	isMultiSampleH5ad := importMode == "h5ad" &&
+		len(rawInput.spec.axesSpec) == 1 &&
+		rawInput.spec.axesSpec[0].name == "pl7.app/sampleGroupId"
+
+	if isMultiSampleH5ad {
+		bundleBuilder := wf.createPBundleBuilder()
+		bundleBuilder.addAnchor("main", args.h5adDatasetRef)
+		bundleBuilder.addSingle({
+			axes: [
+				{ anchor: "main", idx: 0 },
+				{ name: "pl7.app/sampleId", type: "String" }
+			],
+			name: "pl7.app/sequencing/data/sampleGroups"
+		}, "linker")
+		bundle := bundleBuilder.build()
+
+		splitRun := render.createEphemeral(splitH5adTpl, {
+			dataset: rawInput,
+			bundle: bundle
+		})
+		input = splitRun.output("processedInput")
 	}
 
 	// First infer species

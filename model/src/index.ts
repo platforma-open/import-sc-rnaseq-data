@@ -1,6 +1,13 @@
 import type { GraphMakerState } from '@milaboratories/graph-maker';
 import type { InferOutputsType, PColumnIdAndSpec, PlDataTableStateV2, PlRef } from '@platforma-sdk/model';
-import { BlockModel, createPlDataTableStateV2, createPlDataTableV2, isPColumn, isPColumnSpec } from '@platforma-sdk/model';
+import {
+  BlockModel,
+  createPlDataTableStateV2,
+  createPlDataTableV2,
+  isPColumn,
+  isPColumnSpec,
+  plRefsEqual,
+} from '@platforma-sdk/model';
 
 export type BlockArgs = {
   datasetRef?: PlRef;

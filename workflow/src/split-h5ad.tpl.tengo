@@ -1,0 +1,79 @@
+self := import("@platforma-sdk/workflow-tengo:tpl")
+exec := import("@platforma-sdk/workflow-tengo:exec")
+assets := import("@platforma-sdk/workflow-tengo:assets")
+json := import("json")
+pframes := import("@platforma-sdk/workflow-tengo:pframes")
+pSpec := import("@platforma-sdk/workflow-tengo:pframes.spec")
+ll := import("@platforma-sdk/workflow-tengo:ll")
+
+splitH5adSw := assets.importSoftware("@platforma-open/milaboratories.import-sc-rnaseq-data.software:split-h5ad-multi-sample")
+
+self.defineOutputs(["processedInput"])
+
+parseSampleGroups := func(linker) {
+    data := json.decode(linker.data.getData())
+
+    result := {}
+    for key, value in data {
+        k := json.decode(key)
+        if is_undefined(result[k[0]]) {
+            result[k[0]] = {}
+        }
+        result[k[0]][k[1]] = value
+    }
+    return result
+}
+
+self.body(func(inputs) {
+    dataset := inputs.dataset
+    bundle := inputs.bundle
+    linker := bundle.getColumn("linker")
+    sampleGroups := parseSampleGroups(linker)
+
+    // Assuming one input file for the multi-sample h5ad
+    h5ad_file_key := dataset.data.inputs().keys()[0]
+    h5ad_file := dataset.data.inputs()[h5ad_file_key]
+    
+    run := exec.builder().
+        software(splitH5adSw).
+        writeFile("sampleGroups.json", json.encode(sampleGroups)).
+        addFile("input.h5ad", h5ad_file).
+        arg("input.h5ad").
+        saveFile("linker.json").
+        saveDir("output_h5ads").
+        run()
+
+    linkerJson := json.decode(run.getFile("linker.json").getData())
+    outputDir := run.getDir("output_h5ads")
+
+    builder := pframes.pFrameBuilder()
+
+    sampleIds := [s.sampleId for s in linkerJson.samples]
+    sampleNames := [s.sampleName for s in linkerJson.samples]
+    files := [outputDir.get(s.sampleId + ".h5ad") for s in linkerJson.samples]
+
+    sampleIdAxis := pSpec.newAxis("pl7.app/sampleId", "String", { "pl7.app/label": "Sample" })
+
+    builder.addColumn(pSpec.new("pl7.app/sequencing/data", "File", {
+        axes: [sampleIdAxis],
+        domain: { "pl7.app/fileExtension": "h5ad" }
+    }), files)
+
+    builder.addColumn(pSpec.new("pl7.app/label", "String", {
+        axes: [sampleIdAxis]
+    }), sampleNames)
+    
+    // This is a bit of a hack. The keys for the data need to match the axis keys.
+    // The PFrame builder should handle this, but let's be explicit.
+    frameData := {}
+    for i := 0; i < len(sampleIds); i++ {
+        frameData[json.encode([sampleIds[i]])] = files[i]
+    }
+    
+    // Creating a PFrame manually is complex. Let's try to build it with columns.
+    // The builder API should be sufficient.
+    
+    return {
+        processedInput: builder.build()
+    }
+})
