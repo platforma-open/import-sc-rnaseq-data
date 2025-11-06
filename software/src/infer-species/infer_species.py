@@ -583,16 +583,16 @@ class CountMatrixAnalyzer:
         
         # Determine file format
         if self.file_path.suffix.lower() == '.csv':
-            self.df = pl.read_csv(self.file_path, has_header=True, n_rows=100)
+            self.df = pl.read_csv(self.file_path, has_header=True)
         elif self.file_path.suffix.lower() in ['.tsv', '.txt']:
-            self.df = pl.read_csv(self.file_path, separator='\t', has_header=True, n_rows=100)
+            self.df = pl.read_csv(self.file_path, separator='\t', has_header=True)
         else:
             # Try CSV first, then TSV
             try:
-                self.df = pl.read_csv(self.file_path, has_header=True, n_rows=100)
+                self.df = pl.read_csv(self.file_path, has_header=True)
             except Exception:
                 try:
-                    self.df = pl.read_csv(self.file_path, separator='\t', has_header=True, n_rows=100)
+                    self.df = pl.read_csv(self.file_path, separator='\t', has_header=True)
                 except Exception as e:
                     raise SpeciesInferenceError(f"Could not read file: {e}")
     
@@ -673,15 +673,15 @@ def infer_species_from_mtx(features_file: str) -> str:
         if features_path.suffix.lower() == '.gz':
             # Compressed file
             if features_path.stem.endswith('.tsv'):
-                df = pl.read_csv(features_file, separator='\t', has_header=False, n_rows=100000)
+                df = pl.read_csv(features_file, separator='\t', has_header=False)
             else:
-                df = pl.read_csv(features_file, has_header=False, n_rows=100000)
+                df = pl.read_csv(features_file, has_header=False)
         else:
             # Uncompressed file
             if features_path.suffix.lower() in ['.tsv', '.txt']:
-                df = pl.read_csv(features_file, separator='\t', has_header=False, n_rows=100000)
+                df = pl.read_csv(features_file, separator='\t', has_header=False)
             else:
-                df = pl.read_csv(features_file, has_header=False, n_rows=100000)
+                df = pl.read_csv(features_file, has_header=False)
         
         # Extract gene identifiers from first column (Ensembl IDs)
         gene_identifiers = df.select(pl.col(df.columns[0])).to_series().to_list()
