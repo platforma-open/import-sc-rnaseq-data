@@ -5,14 +5,16 @@ smart := import("@platforma-sdk/workflow-tengo:smart")
 pframes := import("@platforma-sdk/workflow-tengo:pframes")
 ll := import("@platforma-sdk/workflow-tengo:ll")
 maps := import("@platforma-sdk/workflow-tengo:maps")
-json := import("json")
 
 processTpl := assets.importTemplate(":process")
 inferSpeciesTpl := assets.importTemplate(":infer-species")
 splitH5adTpl := assets.importTemplate(":split-h5ad")
 
-wf.prepare(func(args) {
+// wf.setPreRun(assets.importTemplate(":prerun"))
+
+wf.body(func(args) {
 	importMode := string(args.importMode)
+	blockId := wf.getBlockId()
 
 	// Resolve the correct input based on import mode
 	rawInput := undefined
@@ -25,17 +27,6 @@ wf.prepare(func(args) {
 	} else {
 		ll.panic("Unknown import mode: %v", importMode)
 	}
-
-	return {
-		resolvedInput: rawInput,
-		resolvedImportMode: importMode
-	}
-})
-
-wf.body(func(args) {
-	rawInput := args.resolvedInput
-	importMode := args.resolvedImportMode
-	blockId := wf.getBlockId()
 
 	input := rawInput
 	isMultiSampleH5ad := false
@@ -60,6 +51,8 @@ wf.body(func(args) {
 			}
 		}
 	}
+
+	// ll.panic("isMultiSampleH5ad: %v", isMultiSampleH5ad)
 
 	if isMultiSampleH5ad {
 		bundleBuilder := wf.createPBundleBuilder()
