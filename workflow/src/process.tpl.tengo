@@ -6,6 +6,7 @@ maps := import("@platforma-sdk/workflow-tengo:maps")
 xsv := import("@platforma-sdk/workflow-tengo:pframes.xsv")
 render := import("@platforma-sdk/workflow-tengo:render")
 pSpec := import("@platforma-sdk/workflow-tengo:pframes.spec")
+ll := import("@platforma-sdk/workflow-tengo:ll")
 
 targetOutputs := import(":libs.target-outputs")
 pfSymbolsConv := import(":libs.pf-symbols-conv")
@@ -33,6 +34,7 @@ self.body(func(inputs) {
 
 	inputSpec := inputs.inputSpec
 	inputData := inputs.inputData
+
 
 	fileExtension := inputSpec.domain["pl7.app/fileExtension"]
 

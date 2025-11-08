@@ -48,9 +48,14 @@ self.body(func(inputs) {
 
     builder := pframes.pFrameBuilder()
 
-    sampleIds := [s.sampleId for s in linkerJson.samples]
-    sampleNames := [s.sampleName for s in linkerJson.samples]
-    files := [outputDir.get(s.sampleId + ".h5ad") for s in linkerJson.samples]
+    sampleIds := []
+    sampleNames := []
+    files := []
+    for s in linkerJson.samples {
+        sampleIds = append(sampleIds, s.sampleId)
+        sampleNames = append(sampleNames, s.sampleName)
+        files = append(files, outputDir.get(s.sampleId + ".h5ad"))
+    }
 
     sampleIdAxis := pSpec.newAxis("pl7.app/sampleId", "String", { "pl7.app/label": "Sample" })
 

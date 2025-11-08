@@ -4,16 +4,15 @@ render := import("@platforma-sdk/workflow-tengo:render")
 smart := import("@platforma-sdk/workflow-tengo:smart")
 pframes := import("@platforma-sdk/workflow-tengo:pframes")
 ll := import("@platforma-sdk/workflow-tengo:ll")
+maps := import("@platforma-sdk/workflow-tengo:maps")
+json := import("json")
 
 processTpl := assets.importTemplate(":process")
 inferSpeciesTpl := assets.importTemplate(":infer-species")
 splitH5adTpl := assets.importTemplate(":split-h5ad")
 
-// wf.setPreRun(assets.importTemplate(":prerun"))
-
-wf.body(func(args) {
+wf.prepare(func(args) {
 	importMode := string(args.importMode)
-	blockId := wf.getBlockId()
 
 	// Resolve the correct input based on import mode
 	rawInput := undefined
@@ -27,10 +26,40 @@ wf.body(func(args) {
 		ll.panic("Unknown import mode: %v", importMode)
 	}
 
+	return {
+		resolvedInput: rawInput,
+		resolvedImportMode: importMode
+	}
+})
+
+wf.body(func(args) {
+	rawInput := args.resolvedInput
+	importMode := args.resolvedImportMode
+	blockId := wf.getBlockId()
+
 	input := rawInput
-	isMultiSampleH5ad := importMode == "h5ad" &&
-		len(rawInput.spec.axesSpec) == 1 &&
-		rawInput.spec.axesSpec[0].name == "pl7.app/sampleGroupId"
+	isMultiSampleH5ad := false
+	if importMode == "h5ad" {
+		spec := rawInput.spec
+		isPFrameSpec := maps.containsKey(spec, "columns")
+
+		if isPFrameSpec {
+			// This is a PFrame
+			for _, columnSpec in spec.columns {
+				if columnSpec.name == "pl7.app/sequencing/data" {
+					if len(columnSpec.axesSpec) == 1 && columnSpec.axesSpec[0].name == "pl7.app/sampleGroupId" {
+						isMultiSampleH5ad = true
+					}
+					break
+				}
+			}
+		} else {
+			// This is a PColumn
+			if maps.containsKey(spec, "axesSpec") && len(spec.axesSpec) == 1 && spec.axesSpec[0].name == "pl7.app/sampleGroupId" {
+				isMultiSampleH5ad = true
+			}
+		}
+	}
 
 	if isMultiSampleH5ad {
 		bundleBuilder := wf.createPBundleBuilder()
