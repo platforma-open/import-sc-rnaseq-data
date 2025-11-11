@@ -31,11 +31,11 @@ const setDataset = (datasetRef: PlRef | undefined) => {
     app.model.ui.title = 'Import GEX Data - ' + app.model.outputs.datasetOptions?.find((o) => plRefsEqual(o.ref, datasetRef))?.label;
 };
 
-const setH5adDataset = (h5adDatasetRef: PlRef | undefined) => {
+/* const setH5adDataset = (h5adDatasetRef: PlRef | undefined) => {
   app.model.args.h5adDatasetRef = h5adDatasetRef;
   if (h5adDatasetRef)
     app.model.ui.title = 'Import GEX Data - ' + app.model.outputs.h5adDatasetOptions?.find((o) => plRefsEqual(o.ref, h5adDatasetRef))?.label;
-};
+}; */
 
 const setMtxDataset = (mtxDatasetRef: PlRef | undefined) => {
   app.model.args.mtxDatasetRef = mtxDatasetRef;
@@ -100,7 +100,7 @@ const errorLogs = useWatchFetch(() => app.model.outputs.errorLog, async (pframeH
         :options="[
           { value: 'csv', label: 'From CSV' },
           { value: 'mtx', label: 'From MTX' },
-          { value: 'h5ad', label: 'From h5ad' },
+          // { value: 'h5ad', label: 'From h5ad' },
         ]"
         label="Importing format"
         tooltip="Select the input format for the gene expression data. Can be either a CSV/TSV file or matrix, barcodes and genes files."
@@ -117,7 +117,7 @@ const errorLogs = useWatchFetch(() => app.model.outputs.errorLog, async (pframeH
         />
       </template>
 
-      <template v-if="app.model.args.importMode === 'h5ad'">
+      <!-- <template v-if="app.model.args.importMode === 'h5ad'">
         <PlDropdownRef
           v-model="app.model.args.h5adDatasetRef"
           :options="app.model.outputs.h5adDatasetOptions"
@@ -126,7 +126,7 @@ const errorLogs = useWatchFetch(() => app.model.outputs.errorLog, async (pframeH
           required
           @update:model-value="setH5adDataset"
         />
-      </template>
+      </template> -->
 
       <template v-if="app.model.args.importMode === 'mtx'">
         <PlDropdownRef
