@@ -72,35 +72,20 @@ self.body(func(inputs) {
 
 	cellMetricsPf := importingCountsResults.xsvOutputFrame("cellMetrics")
 
+	// Build pFrame from rawCounts to pass directly to ptabler
+	rawCountsPf := pframes.pFrameBuilder()
+	rawCountsPf.add("rawCounts", importingCountsResults.outputSpec("rawCounts", "rawCounts"), importingCountsResults.outputData("rawCounts", "rawCounts"))
+	rawCountsPfBuilt := rawCountsPf.build()
+
 	csvCounts := xsv.exportFrame({
 		"rawCounts.spec": importingCountsResults.outputSpec("rawCounts", "rawCounts"),
 		"rawCounts.data": importingCountsResults.outputData("rawCounts", "rawCounts")
 	}, "csv", { mem: "16GiB", cpu: 1 })
-	csvCountsNormalized := xsv.exportFrame({
-		"normCounts.spec": importingCountsResults.outputSpec("normCounts", "normCounts"),
-		"normCounts.data": importingCountsResults.outputData("normCounts", "normCounts")
-	}, "csv", { mem: "16GiB", cpu: 1 })
-
-	// Filter genes
-	filteredGenesResults := render.create(filterGenesTpl, {
-		csvCounts: csvCounts,
-		normCounts: csvCountsNormalized
-	})
-
-	filteredGenesCountsCsv := filteredGenesResults.output("filteredGenesCountsCsv")
-	filteredGenesNormalizedCountsCsv := filteredGenesResults.output("filteredGenesNormalizedCountsCsv")
-
-	countCsvParams := filteredCountsConv.getRawColumns(blockId, species, inputSpec)
-	filteredRawCountsPf := xsv.importFile(filteredGenesCountsCsv, "csv", countCsvParams, { mem: "16GiB", cpu: 1 })
-
-	normCountCsvParams := filteredCountsConv.getNormColumns(blockId, species, inputSpec)
-	filteredNormCountsPf := xsv.importFile(filteredGenesNormalizedCountsCsv, "csv", normCountCsvParams, { mem: "16GiB", cpu: 1 })
-
 
 	// Summary table
 
 	resultsSummary := render.create(resultsSummaryTpl, {
-		filteredGenesCountsCsv: filteredGenesCountsCsv
+		filteredGenesCountsCsv: csvCounts
 	})
 
 	resultsSummaryCsv := resultsSummary.output("resultsSummaryCsv")
@@ -121,7 +106,7 @@ self.body(func(inputs) {
 	// hvgNormCountsPf := xsv.importFile(hvgNormalizedCountsCsv, "csv", normCountCsvParams, { mem: "16GiB", cpu: 1 })
 
 	mapGenesResults := render.create(mapGenesTpl, {
-		filteredGenesCountsCsv: filteredGenesCountsCsv,
+		filteredGenesCountsCsv: csvCounts,
 		species: species
 	})
 
@@ -138,8 +123,16 @@ self.body(func(inputs) {
 	sampleAxisSpec := copy(inputSpec.axesSpec[0])
 
 	exportPfBuilder := pframes.pFrameBuilder()
-	exportPfBuilder.add("rawCount", trace.inject(exportCountsConv.getSpecs(blockId, species, sampleAxisSpec)), filteredRawCountsPf["rawCounts.data"])
-	exportPfBuilder.add("normCount", trace.inject(exportNormCountsConv.getSpecs(blockId, species, sampleAxisSpec)), filteredNormCountsPf["normCounts.data"])
+	exportPfBuilder.add(
+		"rawCount",
+		trace.inject(exportCountsConv.getSpecs(blockId, species, sampleAxisSpec)),
+		importingCountsResults.outputData("rawCounts", "rawCounts")
+	)
+	exportPfBuilder.add(
+		"normCount",
+		trace.inject(exportNormCountsConv.getSpecs(blockId, species, sampleAxisSpec)),
+		importingCountsResults.outputData("normCounts", "normCounts")
+	)
 	// exportPfBuilder.add("rawHvgCount", trace.inject(exportCountsConv.getSpecs(blockId, species, sampleAxisSpec)), hvgCountsPf["rawCounts.data"])
 	// exportPfBuilder.add("normHvgCount", trace.inject(exportNormCountsConv.getSpecs(blockId, species, sampleAxisSpec)), hvgNormCountsPf["normCounts.data"])
 	exportPfBuilder.add("geneSymbols", geneSymbolsPf["geneSymbol.spec"], geneSymbolsPf["geneSymbol.data"])
@@ -148,7 +141,7 @@ self.body(func(inputs) {
 	return {
 		exports: exportPfBuilder.build(),
 		cellMetricsPf: cellMetricsPf,
-		rawCountsPf: filteredRawCountsPf,
+		rawCountsPf: rawCountsPfBuilt,
 		resultsSummaryPf: resultsSummaryPf
 	}
 })
