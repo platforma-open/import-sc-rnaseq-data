@@ -143,24 +143,6 @@
             "{pkg}/calculate_sample_metrics.py"
           ]
         }
-      },
-      "split-h5ad-multi-sample": {
-        "binary": {
-          "artifact": {
-            "type": "python",
-            "registry": "platforma-open",
-            "environment": "@platforma-open/milaboratories.runenv-python-3:3.12.10",
-            "dependencies": {
-              "toolset": "pip",
-              "requirements": "requirements.txt"
-            },
-            "root": "./src/split-h5ad-multi-sample"
-          },
-          "cmd": [
-            "python",
-            "{pkg}/split_h5ad_multi_sample.py"
-          ]
-        }
       }
     }
   }

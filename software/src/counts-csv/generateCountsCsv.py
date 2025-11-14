@@ -31,6 +31,29 @@ def clean_barcode_suffix(barcode):
                 return parts[0]
     return barcode
 
+def clean_gene_name(gene_name):
+    """Clean gene name by removing special characters like newlines, tabs, etc.
+    
+    Removes:
+    - Newlines (\n, \r)
+    - Tabs (\t)
+    - Other control characters
+    - Leading/trailing whitespace
+    """
+    if not isinstance(gene_name, str):
+        gene_name = str(gene_name)
+    
+    # Remove newlines, carriage returns, tabs
+    gene_name = gene_name.replace('\n', '').replace('\r', '').replace('\t', '')
+    
+    # Remove other control characters (ASCII 0-31 except space)
+    gene_name = ''.join(char for char in gene_name if ord(char) >= 32 or char == ' ')
+    
+    # Strip leading/trailing whitespace
+    gene_name = gene_name.strip()
+    
+    return gene_name
+
 def process_input_files(matrix_path, barcodes_path, features_path, output_csv_path):
     # Load the input files
     print("Loading matrix.mtx.gz...")
@@ -44,7 +67,7 @@ def process_input_files(matrix_path, barcodes_path, features_path, output_csv_pa
     
     barcodes_list = [clean_barcode_suffix(barcode) for barcode in barcodes[0].tolist()]
     print(f"Cleaned barcode suffixes. Example: {barcodes[0].tolist()[0]} -> {barcodes_list[0]}")
-    features_list = features[0].tolist()
+    features_list = [clean_gene_name(gene) for gene in features[0].tolist()]
 
     data = []
 
@@ -134,7 +157,10 @@ def load_gene_annotation(annotation_path):
         symbol = row['Gene symbol']
         ensembl_id = row['Ensembl Id']
         if pd.notna(symbol) and pd.notna(ensembl_id):
-            symbol_to_ensembl[symbol] = ensembl_id
+            # Clean both symbol and Ensembl ID
+            clean_symbol = clean_gene_name(str(symbol))
+            clean_ensembl_id = clean_gene_name(str(ensembl_id))
+            symbol_to_ensembl[clean_symbol] = clean_ensembl_id
     
     print(f"Loaded {len(symbol_to_ensembl)} gene symbol to Ensembl ID mappings")
     return symbol_to_ensembl
@@ -247,11 +273,11 @@ def process_csv_file(csv_path, output_csv_path, gene_format=None, annotation_pat
         # Genes in columns, cells in rows - transpose the dataframe
         print("Transposing matrix: genes in columns -> genes in rows")
         df = df.T
-        gene_names = df.index.tolist()
+        gene_names = [clean_gene_name(gene) for gene in df.index.tolist()]
         cell_names = df.columns.tolist()
     else:
         # Genes in rows, cells in columns - use as is
-        gene_names = df.index.tolist()
+        gene_names = [clean_gene_name(gene) for gene in df.index.tolist()]
         cell_names = df.columns.tolist()
     
     print(f"Found {len(gene_names)} genes and {len(cell_names)} cells")
@@ -317,17 +343,62 @@ def process_csv_file(csv_path, output_csv_path, gene_format=None, annotation_pat
     
     print("Done!")
 
-def process_h5ad_file(h5ad_path, output_csv_path):
-    """Process an AnnData h5ad file and convert to long format CSV."""
+def find_sample_column(obs_df, target_sample):
+    """
+    Finds the column in the .obs DataFrame that contains the target sample name.
+    Prioritizes columns with 'sample' in the name.
+    """
+    # Prioritize columns with 'sample' in the name, then check all others
+    candidate_columns = [col for col in obs_df.columns if 'sample' in col.lower()]
+    candidate_columns.extend([col for col in obs_df.columns if col not in candidate_columns])
+
+    for col_name in candidate_columns:
+        # Check only string or categorical columns
+        if obs_df[col_name].dtype.name not in ['category', 'object']:
+            continue
+        
+        unique_values = set(obs_df[col_name].unique())
+        
+        # Check if the target sample is present in the column's unique values
+        if target_sample in unique_values:
+            print(f"Found sample column: '{col_name}' containing sample '{target_sample}'")
+            return col_name
+            
+    return None
+
+def process_h5ad_file(h5ad_path, output_csv_path, sample_name=None):
+    """Process an AnnData h5ad file and convert to long format CSV.
+    
+    Args:
+        h5ad_path: Path to the h5ad file
+        output_csv_path: Path to save the output CSV
+        sample_name: Optional sample name to filter cells by
+    """
     print(f"Loading h5ad file: {h5ad_path}")
     
     # Load the h5ad file
     adata = sc.read_h5ad(h5ad_path)
     
+    # Filter by sample if sample_name is provided
+    if sample_name:
+        print(f"Filtering for sample: {sample_name}")
+        sample_column = find_sample_column(adata.obs, sample_name)
+        
+        if sample_column is None:
+            raise ValueError(f"Could not automatically identify the sample column containing '{sample_name}' in the h5ad file's .obs dataframe.")
+        
+        # Filter AnnData for the target sample
+        adata = adata[adata.obs[sample_column] == sample_name].copy()
+        
+        if adata.n_obs == 0:
+            raise ValueError(f"No cells found for sample '{sample_name}'.")
+        
+        print(f"Filtered to {adata.n_obs} cells for sample '{sample_name}'")
+    
     print(f"AnnData shape: {adata.shape} (cells × genes)")
     
     # Extract gene and cell identifiers
-    gene_names = list(adata.var_names)
+    gene_names = [clean_gene_name(gene) for gene in adata.var_names]
     cell_names = list(adata.obs_names)
     
     # Clean cell barcodes if needed
@@ -412,6 +483,7 @@ def main():
     parser.add_argument('--gene-format', choices=['gene symbol', 'Ensembl Id'], 
                        help="Gene identifier format: 'gene symbol' or 'Ensembl Id' (for xsv format only)")
     parser.add_argument('--annotation', help="Path to gene annotation CSV file (required when --gene-format is 'gene symbol')")
+    parser.add_argument('--sample-name', help="Sample name to filter cells by (optional, for h5ad format only)")
     parser.add_argument('--output', required=True, help="Path to output the raw CSV file")
 
     args = parser.parse_args()
@@ -429,7 +501,7 @@ def main():
     elif args.format == 'h5ad':
         if not args.h5ad:
             parser.error("For h5ad format, --h5ad is required")
-        process_h5ad_file(args.h5ad, args.output)
+        process_h5ad_file(args.h5ad, args.output, args.sample_name)
 
 if __name__ == "__main__":
     main()

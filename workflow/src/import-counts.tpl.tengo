@@ -15,6 +15,7 @@ self.defineOutputs(
 	"rawCountsCsv",
 	"normCountsCsv",
 	"cellMetricsCsv"
+
 )
 
 self.body(func(inputs) {
@@ -24,13 +25,13 @@ self.body(func(inputs) {
 	fileExtension := inputs.fileExtension
 	geneFormat := inputs.geneFormat
 	importMode := string(inputs.importMode)
-
-	inputDataMeta := inputData.getDataAsJson()
+	samplesIdToLabelMap := inputs.samplesIdToLabelMap
+	sampleKey := inputs[pConstants.KEY_FIELD_NAME]
 
 	fileFormat := ""
 	if importMode == "mtx" {
 		fileFormat = "mtx"
-	} else if (importMode == "h5ad") {
+	} else if (importMode == "h5ad" || importMode == "h5ad-multi-sample") {
 		fileFormat = "h5ad"
 	} else {
 		fileFormat = "xsv"
@@ -97,10 +98,14 @@ self.body(func(inputs) {
 		// H5AD format: get first sample
 		firstKey := maps.getKeys(inputMap)[0]
 		uniqueSampleData := inputMap[firstKey]
-
 		countMatrixCsv = countMatrixCsv.
 			addFile("inputCounts." + fileExtension, uniqueSampleData).
 			arg("--h5ad").arg("inputCounts." + fileExtension)
+		if importMode == "h5ad-multi-sample" {
+			sampleName := samplesIdToLabelMap[sampleKey[0]]
+			countMatrixCsv = countMatrixCsv.
+				arg("--sample-name").arg(sampleName)
+		}
 
 	} else if fileFormat == "mtx" {
 		// MTX format: use files extracted earlier
@@ -151,6 +156,11 @@ self.body(func(inputs) {
 			arg("--format").arg("h5ad").
 			addFile("inputCounts." + fileExtension, uniqueSampleData).
 			arg("--h5ad").arg("inputCounts." + fileExtension)
+		if importMode == "h5ad-multi-sample" {
+			sampleName := samplesIdToLabelMap[sampleKey[0]]
+			cellMetricsCsv = cellMetricsCsv.
+				arg("--sample-name").arg(sampleName)
+		}
 	} else if fileFormat == "mtx" {
 		// MTX format: use files extracted earlier
 		matrixExt := compression == "gz" ? ".gz" : ""

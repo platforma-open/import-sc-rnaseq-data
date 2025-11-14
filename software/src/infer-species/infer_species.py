@@ -864,6 +864,7 @@ def main():
     python infer_species.py data.tsv --format csv
     python infer_species.py features.tsv.gz --format mtx
     python infer_species.py data.h5ad --format h5ad
+    python infer_species.py data.h5ad --format h5ad-multi-sample
         """
     )
     
@@ -874,9 +875,9 @@ def main():
     
     parser.add_argument(
         '--format', '-f',
-        choices=['csv', 'mtx', 'h5ad'],
+        choices=['csv', 'mtx', 'h5ad', 'h5ad-multi-sample'],
         default='csv',
-        help='Input format: csv for count matrix files, mtx for 10X Genomics features file, h5ad for AnnData files (default: csv)'
+        help='Input format: csv for count matrix files, mtx for 10X Genomics features file, h5ad for AnnData files, h5ad-multi-sample for multi-sample AnnData files (default: csv)'
     )
     
     parser.add_argument(
@@ -913,7 +914,7 @@ def main():
             # For MTX format, we know it's Ensembl IDs from the features file
             gene_format = 'Ensembl Id'
             
-        elif args.format == 'h5ad':
+        elif args.format in ['h5ad', 'h5ad-multi-sample']:
             species = infer_species_from_h5ad(args.input_file)
             
             # Detect gene format from h5ad file

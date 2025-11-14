@@ -135,12 +135,56 @@ def load_data_csv(csv_path):
     
     return adata
 
-def load_data_h5ad(h5ad_path):
-    """Load data from AnnData h5ad file."""
+def find_sample_column(obs_df, target_sample):
+    """
+    Finds the column in the .obs DataFrame that contains the target sample name.
+    Prioritizes columns with 'sample' in the name.
+    """
+    # Prioritize columns with 'sample' in the name, then check all others
+    candidate_columns = [col for col in obs_df.columns if 'sample' in col.lower()]
+    candidate_columns.extend([col for col in obs_df.columns if col not in candidate_columns])
+
+    for col_name in candidate_columns:
+        # Check only string or categorical columns
+        if obs_df[col_name].dtype.name not in ['category', 'object']:
+            continue
+        
+        unique_values = set(obs_df[col_name].unique())
+        
+        # Check if the target sample is present in the column's unique values
+        if target_sample in unique_values:
+            print(f"Found sample column: '{col_name}' containing sample '{target_sample}'")
+            return col_name
+            
+    return None
+
+def load_data_h5ad(h5ad_path, sample_name=None):
+    """Load data from AnnData h5ad file.
+    
+    Args:
+        h5ad_path: Path to the h5ad file
+        sample_name: Optional sample name to filter cells by
+    """
     print(f"Loading h5ad file: {h5ad_path}")
     
     # Load the h5ad file
     adata = sc.read_h5ad(h5ad_path)
+    
+    # Filter by sample if sample_name is provided
+    if sample_name:
+        print(f"Filtering for sample: {sample_name}")
+        sample_column = find_sample_column(adata.obs, sample_name)
+        
+        if sample_column is None:
+            raise ValueError(f"Could not automatically identify the sample column containing '{sample_name}' in the h5ad file's .obs dataframe.")
+        
+        # Filter AnnData for the target sample
+        adata = adata[adata.obs[sample_column] == sample_name].copy()
+        
+        if adata.n_obs == 0:
+            raise ValueError(f"No cells found for sample '{sample_name}'.")
+        
+        print(f"Filtered to {adata.n_obs} cells for sample '{sample_name}'")
     
     print(f"AnnData shape: {adata.shape[0]} cells × {adata.shape[1]} genes")
     
@@ -226,6 +270,7 @@ def main():
     parser.add_argument('--features', help='Path to features.tsv.gz file (required for mtx format)')
     parser.add_argument('--csv', help='Path to long format CSV file (required for csv format)')
     parser.add_argument('--h5ad', help='Path to h5ad file (required for h5ad format)')
+    parser.add_argument('--sample-name', help="Sample name to filter cells by (optional, for h5ad format only)")
     parser.add_argument('--species', type=str, required=True, help='Species (e.g., homo-sapiens)')
     parser.add_argument('--output', type=str, required=True, help='Output directory')
 
@@ -243,7 +288,7 @@ def main():
     elif args.format == 'h5ad':
         if not args.h5ad:
             parser.error("For h5ad format, --h5ad is required")
-        adata = load_data_h5ad(args.h5ad)
+        adata = load_data_h5ad(args.h5ad, args.sample_name)
 
     # Calculate QC metrics
     calculate_metrics(adata)
