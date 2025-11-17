@@ -60,16 +60,16 @@ def load_data_mtx(matrix_path, barcodes_path, features_path):
 
     # Check for duplicate gene IDs
     if not features['gene_id'].is_unique:
-        print("⚠️ Found duplicate gene IDs. Removing duplicates.")
+        print("Found duplicate gene IDs. Removing duplicates.")
         features = features.drop_duplicates(subset='gene_id', keep='first')
         matrix = matrix[:features.shape[0], :]
     else:
-        print("✅ Gene IDs are unique.")
+        print("Gene IDs are unique.")
 
     # Check for duplicate barcodes
     barcode_duplicates = pd.Series(barcodes).duplicated()
     if barcode_duplicates.any():
-        print(f"⚠️ Found {barcode_duplicates.sum()} duplicate barcodes.")
+        print(f"Found {barcode_duplicates.sum()} duplicate barcodes.")
         # Keep first occurrence of each unique barcode
         unique_indices = ~barcode_duplicates
         barcodes = pd.Series(barcodes)[unique_indices].tolist()
@@ -78,12 +78,12 @@ def load_data_mtx(matrix_path, barcodes_path, features_path):
             matrix = matrix[:, unique_indices]
             print(f"Filtered matrix to {unique_indices.sum()} unique cells")
 
-    # ✅ FINAL FIX: Transpose the matrix
+    # FINAL FIX: Transpose the matrix
     if matrix.shape[0] == len(features) and matrix.shape[1] == len(barcodes):
-        print("🔄 Transposing matrix to match AnnData format (cells × genes).")
+        print("Transposing matrix to match AnnData format (cells x genes).")
         matrix = matrix.transpose()
     else:
-        print("✅ Matrix orientation matches AnnData expectations.")
+        print("Matrix orientation matches AnnData expectations.")
 
     # Final assignment
     adata = sc.AnnData(matrix)
@@ -112,7 +112,7 @@ def load_data_csv(csv_path):
     # Check for duplicate CellId-GeneId combinations
     duplicates = df.duplicated(subset=['CellId', 'GeneId'], keep=False)
     if duplicates.any():
-        print(f"⚠️ Found {duplicates.sum()} duplicate CellId-GeneId combinations. Keeping maximum counts.")
+        print(f"Found {duplicates.sum()} duplicate CellId-GeneId combinations. Keeping maximum counts.")
         df = df.loc[df.groupby(['CellId', 'GeneId'])['Count'].idxmax()]
         print(f"After deduplication: {len(df)} entries")
     

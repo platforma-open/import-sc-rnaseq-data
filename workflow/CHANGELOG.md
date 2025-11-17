@@ -1,5 +1,11 @@
 # @platforma-open/milaboratories.import-sc-rnaseq-data.workflow
 
+## 1.2.1
+
+### Patch Changes
+
+- fbcd123: Update to Parquet
+
 ## 1.2.0
 
 ### Minor Changes

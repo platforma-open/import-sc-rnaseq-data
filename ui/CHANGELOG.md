@@ -1,5 +1,11 @@
 # @platforma-open/milaboratories.import-sc-rnaseq-data.ui
 
+## 1.2.1
+
+### Patch Changes
+
+- 4623894: Do not show h5ad option until fully supported
+
 ## 1.2.0
 
 ### Minor Changes
