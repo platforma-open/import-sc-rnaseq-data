@@ -26,7 +26,7 @@ self.body(func(inputs) {
 	geneFormat := inputs.geneFormat
 	importMode := string(inputs.importMode)
 	samplesIdToLabelMap := inputs.samplesIdToLabelMap
-	sampleKey := inputs[pConstants.KEY_FIELD_NAME]
+	sampleId := inputs[pConstants.KEY_FIELD_NAME][0]
 
 	fileFormat := ""
 	if importMode == "mtx" {
@@ -102,7 +102,7 @@ self.body(func(inputs) {
 			addFile("inputCounts." + fileExtension, uniqueSampleData).
 			arg("--h5ad").arg("inputCounts." + fileExtension)
 		if importMode == "h5ad-multi-sample" {
-			sampleName := samplesIdToLabelMap[sampleKey[0]]
+			sampleName := samplesIdToLabelMap[sampleId]
 			countMatrixCsv = countMatrixCsv.
 				arg("--sample-name").arg(sampleName)
 		}
@@ -125,6 +125,7 @@ self.body(func(inputs) {
 	}
 	
 	countMatrixCsv = countMatrixCsv.
+		arg("--sample-id").arg(sampleId).
 		arg("--output").arg("counts.csv").
 		saveFile("counts.csv").
 		saveFile("counts_normalized.csv").
@@ -157,7 +158,7 @@ self.body(func(inputs) {
 			addFile("inputCounts." + fileExtension, uniqueSampleData).
 			arg("--h5ad").arg("inputCounts." + fileExtension)
 		if importMode == "h5ad-multi-sample" {
-			sampleName := samplesIdToLabelMap[sampleKey[0]]
+			sampleName := samplesIdToLabelMap[sampleId]
 			cellMetricsCsv = cellMetricsCsv.
 				arg("--sample-name").arg(sampleName)
 		}
@@ -179,6 +180,7 @@ self.body(func(inputs) {
 		
 	cellMetricsCsv = cellMetricsCsv.
 		arg("--species").arg(species).
+		arg("--sample-id").arg(sampleId).
 		arg("--output").arg(".").
 		saveFile("cell_metrics.csv").
 		printErrStreamToStdout().
@@ -194,6 +196,7 @@ self.body(func(inputs) {
 		arg("--raw_counts").arg("rawCounts.csv").
 		arg("--normalized_counts").arg("rawCounts_normalized.csv").
 		arg("--metrics").arg("cell_metrics.csv").
+		arg("--sample-id").arg(sampleId).
 		arg("--output_raw").arg("filtered_rawCounts.csv").
 		arg("--output_normalized").arg("filtered_rawCounts_normalized.csv").
 		saveFile("filtered_rawCounts.csv").

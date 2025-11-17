@@ -54,7 +54,7 @@ def clean_gene_name(gene_name):
     
     return gene_name
 
-def process_input_files(matrix_path, barcodes_path, features_path, output_csv_path):
+def process_input_files(matrix_path, barcodes_path, features_path, output_csv_path, sample_id=None):
     # Load the input files
     print("Loading matrix.mtx.gz...")
     matrix = scipy.io.mmread(matrix_path).tocoo()  # Sparse COO format
@@ -80,11 +80,17 @@ def process_input_files(matrix_path, barcodes_path, features_path, output_csv_pa
         cell_id = barcodes_list[j]
         gene_id = features_list[i]
         count = value
-        data.append([cell_id, gene_id, count])
+        if sample_id:
+            data.append([sample_id, cell_id, gene_id, count])
+        else:
+            data.append([cell_id, gene_id, count])
         count_debug += 1
 
     print(f"Total rows written: {count_debug}")
-    df = pd.DataFrame(data, columns=["CellId", "GeneId", "Count"])
+    if sample_id:
+        df = pd.DataFrame(data, columns=["SampleId", "CellId", "GeneId", "Count"])
+    else:
+        df = pd.DataFrame(data, columns=["CellId", "GeneId", "Count"])
 
     print(f"Writing raw count matrix to {output_csv_path}...")
     df.to_csv(output_csv_path, index=False)
@@ -107,9 +113,15 @@ def process_input_files(matrix_path, barcodes_path, features_path, output_csv_pa
     for i, j, value in zip(normalized_matrix.row, normalized_matrix.col, normalized_matrix.data):
         cell_id = adata.obs_names[i]
         gene_id = adata.var_names[j]
-        norm_data.append([cell_id, gene_id, value])
+        if sample_id:
+            norm_data.append([sample_id, cell_id, gene_id, value])
+        else:
+            norm_data.append([cell_id, gene_id, value])
 
-    norm_df = pd.DataFrame(norm_data, columns=["CellId", "GeneId", "NormalizedCount"])
+    if sample_id:
+        norm_df = pd.DataFrame(norm_data, columns=["SampleId", "CellId", "GeneId", "NormalizedCount"])
+    else:
+        norm_df = pd.DataFrame(norm_data, columns=["CellId", "GeneId", "NormalizedCount"])
     normalized_output_csv_path = output_csv_path.replace(".csv", "_normalized.csv")
 
     print(f"Writing normalized count matrix to {normalized_output_csv_path}...")
@@ -243,7 +255,7 @@ def handle_duplicate_combinations_normalized(df_long):
     
     return df_long
 
-def process_csv_file(csv_path, output_csv_path, gene_format=None, annotation_path=None):
+def process_csv_file(csv_path, output_csv_path, gene_format=None, annotation_path=None, sample_id=None):
     """Process a CSV/TSV file with automatic format detection, orientation detection and optional gene format conversion."""
     print(f"Loading file: {csv_path}")
     
@@ -301,10 +313,16 @@ def process_csv_file(csv_path, output_csv_path, gene_format=None, annotation_pat
         for j, cell in enumerate(cleaned_cell_names):
             count = df.iloc[i, j]
             if count > 0:  # Only store non-zero counts
-                data.append([cell, gene, count])
+                if sample_id:
+                    data.append([sample_id, cell, gene, count])
+                else:
+                    data.append([cell, gene, count])
     
     print(f"Total non-zero entries: {len(data)}")
-    df_long = pd.DataFrame(data, columns=["CellId", "GeneId", "Count"])
+    if sample_id:
+        df_long = pd.DataFrame(data, columns=["SampleId", "CellId", "GeneId", "Count"])
+    else:
+        df_long = pd.DataFrame(data, columns=["CellId", "GeneId", "Count"])
     
     # Check for and handle duplicate CellId-GeneId combinations
     df_long = handle_duplicate_combinations(df_long)
@@ -329,9 +347,15 @@ def process_csv_file(csv_path, output_csv_path, gene_format=None, annotation_pat
         for j, gene in enumerate(gene_names):
             value = normalized_matrix[i, j]
             if value > 0:  # Only store non-zero counts
-                norm_data.append([cell, gene, value])
+                if sample_id:
+                    norm_data.append([sample_id, cell, gene, value])
+                else:
+                    norm_data.append([cell, gene, value])
     
-    norm_df = pd.DataFrame(norm_data, columns=["CellId", "GeneId", "NormalizedCount"])
+    if sample_id:
+        norm_df = pd.DataFrame(norm_data, columns=["SampleId", "CellId", "GeneId", "NormalizedCount"])
+    else:
+        norm_df = pd.DataFrame(norm_data, columns=["CellId", "GeneId", "NormalizedCount"])
     
     # Check for and handle duplicate CellId-GeneId combinations in normalized data
     norm_df = handle_duplicate_combinations_normalized(norm_df)
@@ -366,13 +390,14 @@ def find_sample_column(obs_df, target_sample):
             
     return None
 
-def process_h5ad_file(h5ad_path, output_csv_path, sample_name=None):
+def process_h5ad_file(h5ad_path, output_csv_path, sample_name=None, sample_id=None):
     """Process an AnnData h5ad file and convert to long format CSV.
     
     Args:
         h5ad_path: Path to the h5ad file
         output_csv_path: Path to save the output CSV
         sample_name: Optional sample name to filter cells by
+        sample_id: Optional sample ID to add as first column
     """
     print(f"Loading h5ad file: {h5ad_path}")
     
@@ -417,17 +442,26 @@ def process_h5ad_file(h5ad_path, output_csv_path, sample_name=None):
         # Sparse matrix
         for i, j, value in zip(X.tocoo().row, X.tocoo().col, X.tocoo().data):
             if value > 0:
-                raw_data.append([cleaned_cell_names[i], gene_names[j], value])
+                if sample_id:
+                    raw_data.append([sample_id, cleaned_cell_names[i], gene_names[j], value])
+                else:
+                    raw_data.append([cleaned_cell_names[i], gene_names[j], value])
     else:
         # Dense matrix
         for i, cell in enumerate(cleaned_cell_names):
             for j, gene in enumerate(gene_names):
                 value = X[i, j]
                 if value > 0:
-                    raw_data.append([cell, gene, value])
+                    if sample_id:
+                        raw_data.append([sample_id, cell, gene, value])
+                    else:
+                        raw_data.append([cell, gene, value])
     
     print(f"Total non-zero entries: {len(raw_data)}")
-    df_raw = pd.DataFrame(raw_data, columns=["CellId", "GeneId", "Count"])
+    if sample_id:
+        df_raw = pd.DataFrame(raw_data, columns=["SampleId", "CellId", "GeneId", "Count"])
+    else:
+        df_raw = pd.DataFrame(raw_data, columns=["CellId", "GeneId", "Count"])
     
     # Check for and handle duplicate CellId-GeneId combinations
     df_raw = handle_duplicate_combinations(df_raw)
@@ -450,16 +484,25 @@ def process_h5ad_file(h5ad_path, output_csv_path, sample_name=None):
         # Sparse matrix
         for i, j, value in zip(X_norm.tocoo().row, X_norm.tocoo().col, X_norm.tocoo().data):
             if value > 0:
-                norm_data.append([cleaned_cell_names[i], gene_names[j], value])
+                if sample_id:
+                    norm_data.append([sample_id, cleaned_cell_names[i], gene_names[j], value])
+                else:
+                    norm_data.append([cleaned_cell_names[i], gene_names[j], value])
     else:
         # Dense matrix
         for i, cell in enumerate(cleaned_cell_names):
             for j, gene in enumerate(gene_names):
                 value = X_norm[i, j]
                 if value > 0:
-                    norm_data.append([cell, gene, value])
+                    if sample_id:
+                        norm_data.append([sample_id, cell, gene, value])
+                    else:
+                        norm_data.append([cell, gene, value])
     
-    norm_df = pd.DataFrame(norm_data, columns=["CellId", "GeneId", "NormalizedCount"])
+    if sample_id:
+        norm_df = pd.DataFrame(norm_data, columns=["SampleId", "CellId", "GeneId", "NormalizedCount"])
+    else:
+        norm_df = pd.DataFrame(norm_data, columns=["CellId", "GeneId", "NormalizedCount"])
     
     # Check for and handle duplicate CellId-GeneId combinations in normalized data
     norm_df = handle_duplicate_combinations_normalized(norm_df)
@@ -484,6 +527,7 @@ def main():
                        help="Gene identifier format: 'gene symbol' or 'Ensembl Id' (for xsv format only)")
     parser.add_argument('--annotation', help="Path to gene annotation CSV file (required when --gene-format is 'gene symbol')")
     parser.add_argument('--sample-name', help="Sample name to filter cells by (optional, for h5ad format only)")
+    parser.add_argument('--sample-id', help="Sample ID to add as first column in output CSV")
     parser.add_argument('--output', required=True, help="Path to output the raw CSV file")
 
     args = parser.parse_args()
@@ -491,17 +535,17 @@ def main():
     if args.format == 'mtx':
         if not all([args.matrix, args.barcodes, args.features]):
             parser.error("For mtx format, --matrix, --barcodes, and --features are required")
-        process_input_files(args.matrix, args.barcodes, args.features, args.output)
+        process_input_files(args.matrix, args.barcodes, args.features, args.output, args.sample_id)
     elif args.format == 'xsv':
         if not args.xsv:
             parser.error("For xsv format, --xsv is required")
         if args.gene_format == 'gene symbol' and not args.annotation:
             parser.error("For gene format 'gene symbol', --annotation is required")
-        process_csv_file(args.xsv, args.output, args.gene_format, args.annotation)
+        process_csv_file(args.xsv, args.output, args.gene_format, args.annotation, args.sample_id)
     elif args.format == 'h5ad':
         if not args.h5ad:
             parser.error("For h5ad format, --h5ad is required")
-        process_h5ad_file(args.h5ad, args.output, args.sample_name)
+        process_h5ad_file(args.h5ad, args.output, args.sample_name, args.sample_id)
 
 if __name__ == "__main__":
     main()

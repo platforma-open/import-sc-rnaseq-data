@@ -143,6 +143,24 @@
             "{pkg}/calculate_sample_metrics.py"
           ]
         }
+      },
+      "merge-csv": {
+        "binary": {
+          "artifact": {
+            "type": "python",
+            "registry": "platforma-open",
+            "environment": "@platforma-open/milaboratories.runenv-python-3:3.12.10",
+            "dependencies": {
+              "toolset": "pip",
+              "requirements": "requirements.txt"
+            },
+            "root": "./src/merge-csv"
+          },
+          "cmd": [
+            "python",
+            "{pkg}/merge_csv.py"
+          ]
+        }
       }
     }
   }

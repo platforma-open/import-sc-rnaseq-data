@@ -71,6 +71,23 @@ getTargetOutputs := func(species, blockId, sampleAxisSpec) {
 	}]
 }
 
+getMergedCsvOutput := func(blockId) {
+	return [{
+		type: "Resource",
+		spec: {
+			kind: "PColumn",
+			name: "milaboratories.import-sc-rnaseq-data/merged-raw-counts-csv",
+			domain: {
+				"pl7.app/blockId": blockId
+			},
+			valueType: "File"
+		},
+		name: "mergedCsv",
+		path: ["mergedCsv"]
+	}]
+}
+
 export ll.toStrict({
-	getTargetOutputs: getTargetOutputs
+	getTargetOutputs: getTargetOutputs,
+	getMergedCsvOutput: getMergedCsvOutput
 })

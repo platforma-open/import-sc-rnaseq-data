@@ -236,13 +236,19 @@ def classify_outliers(adata, factors):
 
     adata.obs['outlier'] = outliers_total_counts & outliers_n_genes & outliers_pct_top_20 & outliers_pct_mt
 
-def export_metrics(adata, output_dir, filename="cell_metrics.csv"):
+def export_metrics(adata, output_dir, filename="cell_metrics.csv", sample_id=None):
     """ Export QC metrics to a CSV file """
     os.makedirs(output_dir, exist_ok=True)
     output_path = os.path.join(output_dir, filename)
     metrics_df = adata.obs[['total_counts', 'n_genes_by_counts', 'pct_counts_mt', 'complexity', 'pct_counts_in_top_20_genes', 'outlier']]
     metrics_df.index.name = 'CellId'
-    metrics_df.reset_index().to_csv(output_path, index=False)
+    metrics_df = metrics_df.reset_index()
+    
+    if sample_id:
+        # Add SampleId as first column
+        metrics_df.insert(0, 'SampleId', sample_id)
+    
+    metrics_df.to_csv(output_path, index=False)
 
 def get_mito_prefix(species):
     """ Return mitochondrial gene prefix based on species """
@@ -271,6 +277,7 @@ def main():
     parser.add_argument('--csv', help='Path to long format CSV file (required for csv format)')
     parser.add_argument('--h5ad', help='Path to h5ad file (required for h5ad format)')
     parser.add_argument('--sample-name', help="Sample name to filter cells by (optional, for h5ad format only)")
+    parser.add_argument('--sample-id', help="Sample ID to add as first column in output CSV")
     parser.add_argument('--species', type=str, required=True, help='Species (e.g., homo-sapiens)')
     parser.add_argument('--output', type=str, required=True, help='Output directory')
 
@@ -305,7 +312,7 @@ def main():
     classify_outliers(adata, factors)
 
     # Export QC metrics
-    export_metrics(adata, args.output)
+    export_metrics(adata, args.output, sample_id=args.sample_id)
 
 if __name__ == "__main__":
     main()

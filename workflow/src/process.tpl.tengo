@@ -4,6 +4,8 @@ pframes := import("@platforma-sdk/workflow-tengo:pframes")
 xsv := import("@platforma-sdk/workflow-tengo:pframes.xsv")
 render := import("@platforma-sdk/workflow-tengo:render")
 pSpec := import("@platforma-sdk/workflow-tengo:pframes.spec")
+json := import("json")
+maps := import("@platforma-sdk/workflow-tengo:maps")
 
 targetOutputs := import(":libs.target-outputs")
 pfSymbolsConv := import(":libs.pf-symbols-conv")
@@ -14,6 +16,8 @@ resultsSummaryConv := import(":libs.results-summary-conv")
 importCountsTpl := assets.importTemplate(":import-counts")
 resultsSummaryTpl := assets.importTemplate(":results-summary")
 mapGenesTpl := assets.importTemplate(":map-genes")
+mergeCsvTpl := assets.importTemplate(":merge-csv")
+extractSingleFileTpl := assets.importTemplate(":extract-single-file")
 
 self.awaitState("params", "ResourceReady")
 self.awaitState("inputSpec", "ResourceReady")
@@ -70,20 +74,31 @@ self.body(func(inputs) {
 
 	cellMetricsPf := importingCountsResults.xsvOutputFrame("cellMetrics")
 
+	// Merge rawCountsCsv from all samples
+	mergeCsvResults := pframes.processColumn(
+		importingCountsResults.output("rawCountsCsv"),
+		mergeCsvTpl,
+		targetOutputs.getMergedCsvOutput(blockId),
+		{
+			aggregate: [sampleAxisSpec]
+		}
+	)
+	
+	mergedRawCountsCsvData := mergeCsvResults.outputData("mergedCsv")
+	// Extract single file from aggregated result using helper template
+	mergedRawCountsCsv := render.create(extractSingleFileTpl, {
+		pColumnData: mergedRawCountsCsvData
+	}).output("file")
+
 	// Build pFrame from rawCounts to pass directly to ptabler
 	rawCountsPf := pframes.pFrameBuilder()
 	rawCountsPf.add("rawCounts", importingCountsResults.outputSpec("rawCounts", "rawCounts"), importingCountsResults.outputData("rawCounts", "rawCounts"))
 	rawCountsPfBuilt := rawCountsPf.build()
 
-	csvCounts := xsv.exportFrame({
-		"rawCounts.spec": importingCountsResults.outputSpec("rawCounts", "rawCounts"),
-		"rawCounts.data": importingCountsResults.outputData("rawCounts", "rawCounts")
-	}, "csv", { mem: "16GiB", cpu: 1 })
-
 	// Summary table
 
 	resultsSummary := render.create(resultsSummaryTpl, {
-		filteredGenesCountsCsv: csvCounts
+		filteredGenesCountsCsv: mergedRawCountsCsv
 	})
 
 	resultsSummaryCsv := resultsSummary.output("resultsSummaryCsv")
@@ -104,7 +119,7 @@ self.body(func(inputs) {
 	// hvgNormCountsPf := xsv.importFile(hvgNormalizedCountsCsv, "csv", normCountCsvParams, { mem: "16GiB", cpu: 1 })
 
 	mapGenesResults := render.create(mapGenesTpl, {
-		filteredGenesCountsCsv: csvCounts,
+		filteredGenesCountsCsv: mergedRawCountsCsv,
 		species: species
 	})
 
