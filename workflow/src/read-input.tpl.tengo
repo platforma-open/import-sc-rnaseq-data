@@ -10,6 +10,8 @@ pColumn := import("@platforma-sdk/workflow-tengo:pframes.pcolumn")
 
 self.defineOutputs("importMode", "data", "spec", "samplesMap")
 self.awaitState("bundle", "PColumnBundle")
+self.awaitState("inputSpec", "ResourceReady")
+self.awaitState("inputData", "ResourceReady")
 
 RTYPE_P_COLUMN_DATA_JSON := consts.RTYPE_P_COLUMN_DATA_JSON
 
