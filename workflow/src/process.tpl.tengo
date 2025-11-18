@@ -17,7 +17,10 @@ importCountsTpl := assets.importTemplate(":import-counts")
 resultsSummaryTpl := assets.importTemplate(":results-summary")
 mapGenesTpl := assets.importTemplate(":map-genes")
 mergeCsvTpl := assets.importTemplate(":merge-csv")
-extractSingleFileTpl := assets.importTemplate(":extract-single-file")
+
+makeTraceStep := func(blockId) {
+	return {type: "milaboratories.import-sc-rnaseq-data", id: blockId, importance: 20, label: "Import scRNA-seq Data"}
+}
 
 self.awaitState("params", "ResourceReady")
 self.awaitState("inputSpec", "ResourceReady")
@@ -51,12 +54,10 @@ self.body(func(inputs) {
 		{ spec: inputSpec, data: inputData }, importCountsTpl,
 		targetOutputs.getTargetOutputs(species, blockId, sampleAxisSpec),
 		{
-			aggregate: aggregate,
-			passKey: true,
-
-			traceSteps: [{type: "milaboratories.import-sc-rnaseq-data", id: blockId, importance: 20, label: "Import scRNA-seq Data"}],
-
-			extra: {
+		    aggregate: aggregate,
+		    passKey: true,
+		    traceSteps: [makeTraceStep(blockId)],
+		    extra: {
 				species: species,
 				fileExtension: fileExtension,
 				geneFormat: geneFormat,
@@ -80,15 +81,13 @@ self.body(func(inputs) {
 		mergeCsvTpl,
 		targetOutputs.getMergedCsvOutput(blockId),
 		{
-			aggregate: [sampleAxisSpec]
+			aggregate: [sampleAxisSpec],
+			traceSteps: [makeTraceStep(blockId)]
 		}
 	)
 	
 	mergedRawCountsCsvData := mergeCsvResults.outputData("mergedCsv")
-	// Extract single file from aggregated result using helper template
-	mergedRawCountsCsv := render.create(extractSingleFileTpl, {
-		pColumnData: mergedRawCountsCsvData
-	}).output("file")
+	mergedCsvFile := mergedRawCountsCsvData.getFutureInputField(string(json.encode([])))
 
 	// Build pFrame from rawCounts to pass directly to ptabler
 	rawCountsPf := pframes.pFrameBuilder()
@@ -98,7 +97,7 @@ self.body(func(inputs) {
 	// Summary table
 
 	resultsSummary := render.create(resultsSummaryTpl, {
-		filteredGenesCountsCsv: mergedRawCountsCsv
+		filteredGenesCountsCsv: mergedCsvFile
 	})
 
 	resultsSummaryCsv := resultsSummary.output("resultsSummaryCsv")
@@ -119,7 +118,7 @@ self.body(func(inputs) {
 	// hvgNormCountsPf := xsv.importFile(hvgNormalizedCountsCsv, "csv", normCountCsvParams, { mem: "16GiB", cpu: 1 })
 
 	mapGenesResults := render.create(mapGenesTpl, {
-		filteredGenesCountsCsv: mergedRawCountsCsv,
+		filteredGenesCountsCsv: mergedCsvFile,
 		species: species
 	})
 
@@ -128,9 +127,7 @@ self.body(func(inputs) {
 	geneSymbolsImportParams := pfSymbolsConv.getColumns(species)
 	geneSymbolsPf := xsv.importFile(geneSymbolsCsv, "csv", geneSymbolsImportParams, { mem: "16GiB", cpu: 1 })
 
-	trace := pSpec.makeTrace(inputSpec,
-		{type: "milaboratories.import-sc-rnaseq-data", id: blockId, importance: 20, label: "Import scRNA-seq Data"}// + genomes.getSpeciesName(species)}
-	)
+	trace := pSpec.makeTrace(inputSpec, makeTraceStep(blockId))
 
 	// Count matrix export defined with sample from inputSpec + previous specs
 	sampleAxisSpecExp := copy(sampleAxisSpec)

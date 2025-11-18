@@ -13,8 +13,3 @@ h5ad format support
 - Automatic import mode inference from selected dataset
 - Performance improvements: replaced xsv.exportFrame with custom merge-csv template for better memory efficiency
 - Removed gene filtering functionality from the workflow
-- Updated Python dependencies to support h5ad file processing
-- Enhanced species inference logic for h5ad files
-- Added extract-single-file template for handling single file extraction
-- Updated cell metrics calculation to work with h5ad format
-- UI improvements for dataset selection and import mode handling
