@@ -1,5 +1,17 @@
 # @platforma-open/milaboratories.import-sc-rnaseq-data.workflow
 
+## 1.3.0
+
+### Minor Changes
+
+- c7bd46d: h5ad format support
+
+  - Added support for h5ad format input files (AnnData format)
+  - Support for multisample h5ad files with automatic sample detection
+  - Automatic import mode inference from selected dataset
+  - Performance improvements: replaced xsv.exportFrame with custom merge-csv template to improve performance
+  - Removed gene filtering functionality from the workflow
+
 ## 1.2.1
 
 ### Patch Changes
