@@ -68,8 +68,8 @@ self.body(func(inputs) {
 	geneAsset := geneMap.getGeneAsset(species)
 	geneAssetName := geneMap.getAssetName(species)
 
-	mem := !is_undefined(inputs.mem) ? string(inputs.mem) + "GiB" : "64GB"
-	cpu := !is_undefined(inputs.cpu) ? inputs.cpu : 16
+	mem := !is_undefined(inputs.mem) ? string(inputs.mem) + "GiB" : "4GiB"
+	cpu := !is_undefined(inputs.cpu) ? inputs.cpu : 1
 
 	// @TODO: migrate to polars
 	countMatrixCsv := exec.builder().
@@ -136,7 +136,7 @@ self.body(func(inputs) {
 	normCounts := countMatrixCsv.getFile("counts_normalized.csv")
 
 	// Set default memory and CPU for imports
-    defaultConvMem := "16GiB" // @TODO: set based on the size of the input
+    defaultConvMem := "4GiB" // @TODO: set based on the size of the input
     defaultConvCpu := 1 // @TODO: set based on the size of the input
 	
 	cellMetricsCsv := exec.builder().

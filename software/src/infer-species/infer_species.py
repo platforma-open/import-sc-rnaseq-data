@@ -503,33 +503,27 @@ class GeneIdentifierAnalyzer:
         return species_scores
     
     def _infer_from_symbols(self) -> Dict[str, float]:
-        """Infer species from gene symbols using progressive sampling approach."""
+        """Infer species from gene symbols using optimized set operations."""
         species_scores = {}
         total_genes = len(self.gene_identifiers)
         
-        # Step 1: Progressive sampling - check genes in batches of 100
-        batch_size = 100
+        # Convert gene identifiers to set for O(1) lookup
+        gene_set = set(self.gene_identifiers)
+        
+        # Step 1: Check for exact matches using set intersection (much faster)
         exact_matches_found = False
         
-        for start_idx in range(0, total_genes, batch_size):
-            end_idx = min(start_idx + batch_size, total_genes)
-            batch_genes = self.gene_identifiers[start_idx:end_idx]
+        for species, data in self.SPECIES_GENES.items():
+            symbols = data['symbols']
+            # Use set intersection - O(min(n,m)) instead of O(n*m)
+            exact_matches = len(gene_set & symbols)
             
-            # Check for exact species-specific gene matches in this batch
-            for species, data in self.SPECIES_GENES.items():
-                symbols = data['symbols']
-                exact_matches = sum(1 for gene_id in batch_genes if gene_id in symbols)
-                
-                if exact_matches > 0:
-                    exact_matches_found = True
-                    # High confidence score for exact matches
-                    species_scores[species] = exact_matches * 10 / len(batch_genes)
-            
-            # If we found exact matches, stop here (don't need to check more genes)
-            if exact_matches_found:
-                break
+            if exact_matches > 0:
+                exact_matches_found = True
+                # High confidence score for exact matches
+                species_scores[species] = exact_matches * 10 / total_genes
         
-        # Step 2: If no exact matches found after checking ALL genes, use pattern matching
+        # Step 2: If no exact matches found, use pattern matching
         if not exact_matches_found:
             # Sort species by priority (most distinctive first)
             sorted_species = sorted(self.SPECIES_GENES.items(), key=lambda x: x[1]['priority'])
@@ -538,9 +532,12 @@ class GeneIdentifierAnalyzer:
                 patterns = data['patterns']
                 priority = data['priority']
                 
-                # Count pattern matches across ALL genes
-                pattern_matches = sum(1 for gene_id in self.gene_identifiers 
-                                    if any(pattern.match(gene_id) for pattern in patterns))
+                # Count pattern matches - iterate once through genes, check all patterns
+                pattern_matches = 0
+                for gene_id in self.gene_identifiers:
+                    # Check if any pattern matches (short-circuit on first match)
+                    if any(pattern.match(gene_id) for pattern in patterns):
+                        pattern_matches += 1
                 
                 if pattern_matches > 0:
                     # Calculate score with priority weighting
@@ -548,7 +545,7 @@ class GeneIdentifierAnalyzer:
                     total_score = pattern_matches * priority_weight / total_genes
                     species_scores[species] = total_score
         
-        # Step 3: If still no matches after checking ALL genes and patterns, provide fallback
+        # Step 3: If still no matches, provide fallback
         if not species_scores:
             # Default to human as most common species in research
             species_scores['human'] = 0.1  # Low confidence score

@@ -305,24 +305,31 @@ def process_csv_file(csv_path, output_csv_path, gene_format=None, annotation_pat
     cleaned_cell_names = [clean_barcode_suffix(cell) for cell in cell_names]
     print(f"Cleaned barcode suffixes. Example: {cell_names[0]} -> {cleaned_cell_names[0]}")
     
-    # Convert to long format
-    data = []
+    # Convert to long format using pandas stack (much faster than nested loops)
     print(f"Processing {df.shape[0]} genes x {df.shape[1]} cells...")
     
-    for i, gene in enumerate(gene_names):
-        for j, cell in enumerate(cleaned_cell_names):
-            count = df.iloc[i, j]
-            if count > 0:  # Only store non-zero counts
-                if sample_id:
-                    data.append([sample_id, cell, gene, count])
-                else:
-                    data.append([cell, gene, count])
+    # Update dataframe with cleaned names
+    df.index = gene_names
+    df.columns = cleaned_cell_names
     
-    print(f"Total non-zero entries: {len(data)}")
+    # Stack to convert wide to long format: creates a Series with MultiIndex (gene, cell)
+    df_stacked = df.stack()
+    
+    # Filter out zeros (much faster than doing it in a loop)
+    df_stacked = df_stacked[df_stacked > 0]
+    
+    print(f"Total non-zero entries: {len(df_stacked)}")
+    
+    # Convert to DataFrame with proper column names
+    df_long = df_stacked.reset_index()
+    df_long.columns = ["GeneId", "CellId", "Count"]
+    
+    # Reorder columns and add sample_id if needed
     if sample_id:
-        df_long = pd.DataFrame(data, columns=["SampleId", "CellId", "GeneId", "Count"])
+        df_long.insert(0, "SampleId", sample_id)
+        df_long = df_long[["SampleId", "CellId", "GeneId", "Count"]]
     else:
-        df_long = pd.DataFrame(data, columns=["CellId", "GeneId", "Count"])
+        df_long = df_long[["CellId", "GeneId", "Count"]]
     
     # Check for and handle duplicate CellId-GeneId combinations
     df_long = handle_duplicate_combinations(df_long)
@@ -341,21 +348,26 @@ def process_csv_file(csv_path, output_csv_path, gene_format=None, annotation_pat
     sc.pp.normalize_total(adata, target_sum=1e4)
     normalized_matrix = adata.X
     
-    # Extract normalized counts
-    norm_data = []
-    for i, cell in enumerate(cleaned_cell_names):
-        for j, gene in enumerate(gene_names):
-            value = normalized_matrix[i, j]
-            if value > 0:  # Only store non-zero counts
-                if sample_id:
-                    norm_data.append([sample_id, cell, gene, value])
-                else:
-                    norm_data.append([cell, gene, value])
+    # Extract normalized counts using pandas (much faster than nested loops)
+    # Convert normalized matrix back to DataFrame
+    norm_df_wide = pd.DataFrame(normalized_matrix, index=cleaned_cell_names, columns=gene_names)
     
+    # Stack to convert wide to long format
+    norm_stacked = norm_df_wide.stack()
+    
+    # Filter out zeros
+    norm_stacked = norm_stacked[norm_stacked > 0]
+    
+    # Convert to DataFrame with proper column names
+    norm_df = norm_stacked.reset_index()
+    norm_df.columns = ["CellId", "GeneId", "NormalizedCount"]
+    
+    # Add sample_id if needed
     if sample_id:
-        norm_df = pd.DataFrame(norm_data, columns=["SampleId", "CellId", "GeneId", "NormalizedCount"])
+        norm_df.insert(0, "SampleId", sample_id)
+        norm_df = norm_df[["SampleId", "CellId", "GeneId", "NormalizedCount"]]
     else:
-        norm_df = pd.DataFrame(norm_data, columns=["CellId", "GeneId", "NormalizedCount"])
+        norm_df = norm_df[["CellId", "GeneId", "NormalizedCount"]]
     
     # Check for and handle duplicate CellId-GeneId combinations in normalized data
     norm_df = handle_duplicate_combinations_normalized(norm_df)
@@ -390,7 +402,7 @@ def find_sample_column(obs_df, target_sample):
             
     return None
 
-def process_h5ad_file(h5ad_path, output_csv_path, sample_name=None, sample_id=None):
+def process_h5ad_file(h5ad_path, output_csv_path, sample_name=None, sample_id=None, sample_column_name=None):
     """Process an AnnData h5ad file and convert to long format CSV.
     
     Args:
@@ -398,6 +410,7 @@ def process_h5ad_file(h5ad_path, output_csv_path, sample_name=None, sample_id=No
         output_csv_path: Path to save the output CSV
         sample_name: Optional sample name to filter cells by
         sample_id: Optional sample ID to add as first column
+        sample_column_name: Optional column name to use for sample filtering
     """
     print(f"Loading h5ad file: {h5ad_path}")
     
@@ -407,10 +420,19 @@ def process_h5ad_file(h5ad_path, output_csv_path, sample_name=None, sample_id=No
     # Filter by sample if sample_name is provided
     if sample_name:
         print(f"Filtering for sample: {sample_name}")
-        sample_column = find_sample_column(adata.obs, sample_name)
         
-        if sample_column is None:
-            raise ValueError(f"Could not automatically identify the sample column containing '{sample_name}' in the h5ad file's .obs dataframe.")
+        if sample_column_name:
+            # Use provided column name
+            print(f"Using provided sample column name: '{sample_column_name}'")
+            if sample_column_name not in adata.obs.columns:
+                raise ValueError(f"Provided sample column '{sample_column_name}' not found in the h5ad file's .obs dataframe. Available columns: {list(adata.obs.columns)}")
+            sample_column = sample_column_name
+        else:
+            # Auto-detect column name
+            sample_column = find_sample_column(adata.obs, sample_name)
+            
+            if sample_column is None:
+                raise ValueError(f"Could not automatically identify the sample column containing '{sample_name}' in the h5ad file's .obs dataframe.")
         
         # Filter AnnData for the target sample
         adata = adata[adata.obs[sample_column] == sample_name].copy()
@@ -434,34 +456,35 @@ def process_h5ad_file(h5ad_path, output_csv_path, sample_name=None, sample_id=No
     # Get the count matrix
     X = adata.X
     
-    # Convert to long format for raw counts
+    # Convert to long format for raw counts (optimized)
     print(f"Processing {X.shape[0]} cells × {X.shape[1]} genes...")
-    raw_data = []
     
     if hasattr(X, 'tocoo'):
-        # Sparse matrix
-        for i, j, value in zip(X.tocoo().row, X.tocoo().col, X.tocoo().data):
-            if value > 0:
-                if sample_id:
-                    raw_data.append([sample_id, cleaned_cell_names[i], gene_names[j], value])
-                else:
-                    raw_data.append([cleaned_cell_names[i], gene_names[j], value])
+        # Sparse matrix - create DataFrame directly from COO format
+        X_coo = X.tocoo()
+        df_raw = pd.DataFrame({
+            'CellId': [cleaned_cell_names[i] for i in X_coo.row],
+            'GeneId': [gene_names[j] for j in X_coo.col],
+            'Count': X_coo.data
+        })
+        # Filter out zeros
+        df_raw = df_raw[df_raw['Count'] > 0]
     else:
-        # Dense matrix
-        for i, cell in enumerate(cleaned_cell_names):
-            for j, gene in enumerate(gene_names):
-                value = X[i, j]
-                if value > 0:
-                    if sample_id:
-                        raw_data.append([sample_id, cell, gene, value])
-                    else:
-                        raw_data.append([cell, gene, value])
+        # Dense matrix - use pandas stack for efficiency
+        df_wide = pd.DataFrame(X, index=cleaned_cell_names, columns=gene_names)
+        df_stacked = df_wide.stack()
+        df_stacked = df_stacked[df_stacked > 0]
+        df_raw = df_stacked.reset_index()
+        df_raw.columns = ["CellId", "GeneId", "Count"]
     
-    print(f"Total non-zero entries: {len(raw_data)}")
+    # Add sample_id if needed
     if sample_id:
-        df_raw = pd.DataFrame(raw_data, columns=["SampleId", "CellId", "GeneId", "Count"])
+        df_raw.insert(0, "SampleId", sample_id)
+        df_raw = df_raw[["SampleId", "CellId", "GeneId", "Count"]]
     else:
-        df_raw = pd.DataFrame(raw_data, columns=["CellId", "GeneId", "Count"])
+        df_raw = df_raw[["CellId", "GeneId", "Count"]]
+    
+    print(f"Total non-zero entries: {len(df_raw)}")
     
     # Check for and handle duplicate CellId-GeneId combinations
     df_raw = handle_duplicate_combinations(df_raw)
@@ -476,33 +499,33 @@ def process_h5ad_file(h5ad_path, output_csv_path, sample_name=None, sample_id=No
     adata_norm = adata.copy()
     sc.pp.normalize_total(adata_norm, target_sum=1e4)
     
-    # Extract normalized counts
+    # Extract normalized counts (optimized)
     X_norm = adata_norm.X
-    norm_data = []
     
     if hasattr(X_norm, 'tocoo'):
-        # Sparse matrix
-        for i, j, value in zip(X_norm.tocoo().row, X_norm.tocoo().col, X_norm.tocoo().data):
-            if value > 0:
-                if sample_id:
-                    norm_data.append([sample_id, cleaned_cell_names[i], gene_names[j], value])
-                else:
-                    norm_data.append([cleaned_cell_names[i], gene_names[j], value])
+        # Sparse matrix - create DataFrame directly from COO format
+        X_norm_coo = X_norm.tocoo()
+        norm_df = pd.DataFrame({
+            'CellId': [cleaned_cell_names[i] for i in X_norm_coo.row],
+            'GeneId': [gene_names[j] for j in X_norm_coo.col],
+            'NormalizedCount': X_norm_coo.data
+        })
+        # Filter out zeros
+        norm_df = norm_df[norm_df['NormalizedCount'] > 0]
     else:
-        # Dense matrix
-        for i, cell in enumerate(cleaned_cell_names):
-            for j, gene in enumerate(gene_names):
-                value = X_norm[i, j]
-                if value > 0:
-                    if sample_id:
-                        norm_data.append([sample_id, cell, gene, value])
-                    else:
-                        norm_data.append([cell, gene, value])
+        # Dense matrix - use pandas stack for efficiency
+        norm_df_wide = pd.DataFrame(X_norm, index=cleaned_cell_names, columns=gene_names)
+        norm_stacked = norm_df_wide.stack()
+        norm_stacked = norm_stacked[norm_stacked > 0]
+        norm_df = norm_stacked.reset_index()
+        norm_df.columns = ["CellId", "GeneId", "NormalizedCount"]
     
+    # Add sample_id if needed
     if sample_id:
-        norm_df = pd.DataFrame(norm_data, columns=["SampleId", "CellId", "GeneId", "NormalizedCount"])
+        norm_df.insert(0, "SampleId", sample_id)
+        norm_df = norm_df[["SampleId", "CellId", "GeneId", "NormalizedCount"]]
     else:
-        norm_df = pd.DataFrame(norm_data, columns=["CellId", "GeneId", "NormalizedCount"])
+        norm_df = norm_df[["CellId", "GeneId", "NormalizedCount"]]
     
     # Check for and handle duplicate CellId-GeneId combinations in normalized data
     norm_df = handle_duplicate_combinations_normalized(norm_df)
@@ -527,6 +550,7 @@ def main():
                        help="Gene identifier format: 'gene symbol' or 'Ensembl Id' (for xsv format only)")
     parser.add_argument('--annotation', help="Path to gene annotation CSV file (required when --gene-format is 'gene symbol')")
     parser.add_argument('--sample-name', help="Sample name to filter cells by (optional, for h5ad format only)")
+    parser.add_argument('--sample-column-name', help="Column name in h5ad .obs that contains sample identifiers (optional, for h5ad format only)")
     parser.add_argument('--sample-id', help="Sample ID to add as first column in output CSV")
     parser.add_argument('--output', required=True, help="Path to output the raw CSV file")
 
@@ -545,7 +569,7 @@ def main():
     elif args.format == 'h5ad':
         if not args.h5ad:
             parser.error("For h5ad format, --h5ad is required")
-        process_h5ad_file(args.h5ad, args.output, args.sample_name, args.sample_id)
+        process_h5ad_file(args.h5ad, args.output, args.sample_name, args.sample_id, args.sample_column_name)
 
 if __name__ == "__main__":
     main()

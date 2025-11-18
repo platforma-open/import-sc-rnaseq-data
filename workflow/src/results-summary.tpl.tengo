@@ -6,15 +6,21 @@ assets := import("@platforma-sdk/workflow-tengo:assets")
 self.defineOutputs("resultsSummaryCsv")
 
 self.body(func(inputs) {
-	csvCounts := inputs.filteredGenesCountsCsv
+	csvCountsList := inputs.filteredGenesCountsCsvList
 
-	resultsSummaryJob := exec.builder().
+	cmdBuilder := exec.builder().
 		software(assets.importSoftware("@platforma-open/milaboratories.import-sc-rnaseq-data.software:results-summary")).
 		mem("16GiB").
 		cpu(1).
-		addFile("rawCounts.csv", csvCounts).
-		arg("-i").arg("rawCounts.csv").
-		arg("-o").arg("sample_metrics.csv").
+		arg("-o").arg("sample_metrics.csv")
+
+	// Add all input files
+	for i, csvFile in csvCountsList {
+		fileName := "rawCounts_" + string(i) + ".csv"
+		cmdBuilder.addFile(fileName, csvFile).arg("-i").arg(fileName)
+	}
+
+	resultsSummaryJob := cmdBuilder.
 		saveFile("sample_metrics.csv").
 		run()
 

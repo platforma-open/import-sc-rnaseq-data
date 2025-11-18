@@ -25,44 +25,48 @@ import numpy as np
 import argparse
 from pathlib import Path
 import sys
-from typing import Dict, Any
+from typing import Dict, Any, List
 
+SAMPLE_COLUMN_NAME = "SampleId"
+CELL_COLUMN_NAME = "CellId"
+GENE_COLUMN_NAME = "GeneId"
+COUNT_COLUMN_NAME = "Count"
 
 def calculate_sample_metrics(df: pl.DataFrame) -> Dict[str, Any]:
     """
     Calculate basic metrics for a single sample using Polars.
     
     Args:
-        df: Polars DataFrame with columns ['Sample', 'Cell ID', 'Ensembl Id', 'Raw gene expression']
+        df: Polars DataFrame with columns ['SampleId', 'CellId', 'GeneId', 'Count']
         
     Returns:
         Dictionary with calculated metrics
     """
     # Remove header row if present
-    df = df.filter(pl.col("Sample") != "Sample")
+    df = df.filter(pl.col(SAMPLE_COLUMN_NAME) != SAMPLE_COLUMN_NAME)
     
     # Basic counts
-    n_cells = df.select(pl.col("Cell ID").n_unique()).item()
-    n_genes = df.select(pl.col("Ensembl Id").n_unique()).item()
-    total_umis = df.select(pl.col("Raw gene expression").sum()).item()
+    n_cells = df.select(pl.col(CELL_COLUMN_NAME).n_unique()).item()
+    n_genes = df.select(pl.col(GENE_COLUMN_NAME).n_unique()).item()
+    total_umis = df.select(pl.col(COUNT_COLUMN_NAME).sum()).item()
     
     # Calculate UMIs per cell
-    umis_per_cell = (df.group_by("Cell ID")
-                    .agg(pl.col("Raw gene expression").sum())
-                    .select("Raw gene expression"))
+    umis_per_cell = (df.group_by(CELL_COLUMN_NAME)
+                    .agg(pl.col(COUNT_COLUMN_NAME).sum())
+                    .select(COUNT_COLUMN_NAME))
     
-    mean_umis_per_cell = umis_per_cell.select(pl.col("Raw gene expression").mean()).item()
-    median_umis_per_cell = umis_per_cell.select(pl.col("Raw gene expression").median()).item()
+    mean_umis_per_cell = umis_per_cell.select(pl.col(COUNT_COLUMN_NAME).mean()).item()
+    median_umis_per_cell = umis_per_cell.select(pl.col(COUNT_COLUMN_NAME).median()).item()
     
     # Calculate genes per cell (count non-zero values per cell)
     # Use a more robust approach: count distinct genes per cell
-    genes_per_cell = (df.filter(pl.col("Raw gene expression") > 0)
-                     .group_by("Cell ID")
-                     .agg(pl.col("Ensembl Id").n_unique().alias("Raw gene expression"))
-                     .select("Raw gene expression"))
+    genes_per_cell = (df.filter(pl.col(COUNT_COLUMN_NAME) > 0)
+                     .group_by(CELL_COLUMN_NAME)
+                     .agg(pl.col(GENE_COLUMN_NAME).n_unique().alias(COUNT_COLUMN_NAME))
+                     .select(COUNT_COLUMN_NAME))
     
-    mean_genes_per_cell = genes_per_cell.select(pl.col("Raw gene expression").mean()).item()
-    median_genes_per_cell = genes_per_cell.select(pl.col("Raw gene expression").median()).item()
+    mean_genes_per_cell = genes_per_cell.select(pl.col(COUNT_COLUMN_NAME).mean()).item()
+    median_genes_per_cell = genes_per_cell.select(pl.col(COUNT_COLUMN_NAME).median()).item()
     
     return {
         'n_cells': n_cells,
@@ -75,26 +79,49 @@ def calculate_sample_metrics(df: pl.DataFrame) -> Dict[str, Any]:
     }
 
 
-def process_file(input_file: str, output_file: str) -> None:
+def process_files(input_files: List[str], output_file: str) -> None:
     """
-    Process the input file and calculate metrics for each sample using Polars.
+    Process multiple input files and calculate metrics for each sample using Polars.
     
     Args:
-        input_file: Path to input CSV file
+        input_files: List of paths to input CSV files
         output_file: Path to output CSV file
     """
-    print(f"Loading data from {input_file}...")
+    print(f"Loading data from {len(input_files)} file(s)...")
     
-    # Read the entire file with Polars (more efficient for this use case)
-    df = pl.read_csv(input_file)
+    # Read all CSV files and concatenate them
+    dataframes = []
+    for input_file in input_files:
+        input_path = Path(input_file)
+        if not input_path.exists():
+            print(f"Warning: Input file {input_file} does not exist, skipping...")
+            continue
+        
+        print(f"  Reading {input_file}...")
+        try:
+            df = pl.read_csv(input_file)
+            dataframes.append(df)
+            print(f"    Loaded {len(df)} rows")
+        except Exception as e:
+            print(f"  Error reading {input_file}: {e}")
+            continue
+    
+    if not dataframes:
+        print("Error: No valid CSV files could be read!")
+        sys.exit(1)
+    
+    # Concatenate all dataframes
+    print("Concatenating dataframes...")
+    df = pl.concat(dataframes, how="vertical")
+    print(f"Total rows: {len(df)}")
     
     # Get all unique samples
     print("Identifying samples...")
-    samples = df.select(pl.col("Sample").unique()).to_series().to_list()
+    samples = df.select(pl.col(SAMPLE_COLUMN_NAME).unique()).to_series().to_list()
     
     # Remove 'Sample' header if present
-    if 'Sample' in samples:
-        samples.remove('Sample')
+    if SAMPLE_COLUMN_NAME in samples:
+        samples.remove(SAMPLE_COLUMN_NAME)
     
     print(f"Found {len(samples)} samples: {samples}")
     
@@ -105,7 +132,7 @@ def process_file(input_file: str, output_file: str) -> None:
         print(f"Processing sample: {sample}")
         
         # Filter data for this sample
-        sample_df = df.filter(pl.col("Sample") == sample)
+        sample_df = df.filter(pl.col(SAMPLE_COLUMN_NAME) == sample)
         
         if not sample_df.is_empty():
             metrics = calculate_sample_metrics(sample_df)
@@ -154,13 +181,13 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  python calculate_sample_metrics.py -i rawCounts.csv -o sample_metrics.csv
+  python calculate_sample_metrics.py -i rawCounts1.csv -i rawCounts2.csv -o sample_metrics.csv
   
-The input file should have columns:
-- Sample: Sample identifier
-- Cell ID: Cell barcode identifier  
-- Ensembl Id: Gene identifier
-- Raw gene expression: Count value
+The input file(s) should have columns:
+- SampleId: Sample identifier
+- CellId: Cell barcode identifier  
+- GeneId: Gene identifier
+- Count: Count value
 
 Output metrics include:
 - n_cells: Number of cells
@@ -173,25 +200,26 @@ Output metrics include:
         """
     )
     
-    parser.add_argument('-i', '--input', required=True, 
-                       help='Input CSV file with long-format count data')
+    parser.add_argument('-i', '--input', required=True, action='append', dest='inputs',
+                       help='Input CSV file(s) with long-format count data (can be specified multiple times)')
     parser.add_argument('-o', '--output', required=True,
                        help='Output CSV file with sample metrics')
     
     args = parser.parse_args()
     
-    # Check input file exists
-    input_path = Path(args.input)
-    if not input_path.exists():
-        print(f"Error: Input file {args.input} does not exist!")
-        sys.exit(1)
+    # Check input files exist
+    for input_file in args.inputs:
+        input_path = Path(input_file)
+        if not input_path.exists():
+            print(f"Error: Input file {input_file} does not exist!")
+            sys.exit(1)
     
     # Create output directory if needed
     output_path = Path(args.output)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     
     try:
-        process_file(args.input, args.output)
+        process_files(args.inputs, args.output)
     except Exception as e:
         print(f"Error processing file: {e}")
         sys.exit(1)

@@ -116,20 +116,35 @@ def load_data_csv(csv_path):
         df = df.loc[df.groupby(['CellId', 'GeneId'])['Count'].idxmax()]
         print(f"After deduplication: {len(df)} entries")
     
-    # Pivot to create matrix format (cells × genes)
+    # Create sparse matrix directly from long format (much more efficient than pivot)
     print("Converting to matrix format...")
-    matrix_df = df.pivot(index='CellId', columns='GeneId', values='Count').fillna(0)
     
-    # Convert to sparse matrix for efficiency
-    matrix = scipy.sparse.csr_matrix(matrix_df.values)
+    # Get unique cells and genes
+    unique_cells = df['CellId'].unique()
+    unique_genes = df['GeneId'].unique()
+    
+    # Create mappings for indices
+    cell_to_idx = {cell: idx for idx, cell in enumerate(unique_cells)}
+    gene_to_idx = {gene: idx for idx, gene in enumerate(unique_genes)}
+    
+    # Build sparse matrix using COO format
+    row_indices = [cell_to_idx[cell] for cell in df['CellId']]
+    col_indices = [gene_to_idx[gene] for gene in df['GeneId']]
+    values = df['Count'].values
+    
+    # Create sparse matrix (cells × genes)
+    matrix = scipy.sparse.csr_matrix(
+        (values, (row_indices, col_indices)),
+        shape=(len(unique_cells), len(unique_genes))
+    )
     
     # Create AnnData object
     adata = sc.AnnData(matrix)
-    adata.obs_names = pd.Index(matrix_df.index, name='cell_id')
-    adata.var_names = pd.Index(matrix_df.columns, name='gene_id')
+    adata.obs_names = pd.Index(unique_cells, name='cell_id')
+    adata.var_names = pd.Index(unique_genes, name='gene_id')
     
     # For gene symbols, we'll use the gene IDs as symbols (since we don't have separate symbols)
-    adata.var['gene_symbol'] = matrix_df.columns.values
+    adata.var['gene_symbol'] = unique_genes
     
     print(f"Created AnnData object: {adata.shape[0]} cells × {adata.shape[1]} genes")
     
@@ -157,12 +172,13 @@ def find_sample_column(obs_df, target_sample):
             
     return None
 
-def load_data_h5ad(h5ad_path, sample_name=None):
+def load_data_h5ad(h5ad_path, sample_name=None, sample_column_name=None):
     """Load data from AnnData h5ad file.
     
     Args:
         h5ad_path: Path to the h5ad file
         sample_name: Optional sample name to filter cells by
+        sample_column_name: Optional column name to use for sample filtering
     """
     print(f"Loading h5ad file: {h5ad_path}")
     
@@ -172,10 +188,19 @@ def load_data_h5ad(h5ad_path, sample_name=None):
     # Filter by sample if sample_name is provided
     if sample_name:
         print(f"Filtering for sample: {sample_name}")
-        sample_column = find_sample_column(adata.obs, sample_name)
         
-        if sample_column is None:
-            raise ValueError(f"Could not automatically identify the sample column containing '{sample_name}' in the h5ad file's .obs dataframe.")
+        if sample_column_name:
+            # Use provided column name
+            print(f"Using provided sample column name: '{sample_column_name}'")
+            if sample_column_name not in adata.obs.columns:
+                raise ValueError(f"Provided sample column '{sample_column_name}' not found in the h5ad file's .obs dataframe. Available columns: {list(adata.obs.columns)}")
+            sample_column = sample_column_name
+        else:
+            # Auto-detect column name
+            sample_column = find_sample_column(adata.obs, sample_name)
+            
+            if sample_column is None:
+                raise ValueError(f"Could not automatically identify the sample column containing '{sample_name}' in the h5ad file's .obs dataframe.")
         
         # Filter AnnData for the target sample
         adata = adata[adata.obs[sample_column] == sample_name].copy()
@@ -208,11 +233,27 @@ def calculate_metrics(adata):
     sc.pp.calculate_qc_metrics(adata, percent_top=[20], log1p=False, inplace=True)
 
 def mitochondrial_percentage(adata, mito_prefix='MT-'):
-    """ Calculate mitochondrial gene expression percentage """
+    """ Calculate mitochondrial gene expression percentage (optimized for sparse matrices) """
     adata.var['mt'] = adata.var['gene_symbol'].str.startswith(mito_prefix, na=False)
-    adata.obs['pct_counts_mt'] = (
-        np.sum(adata[:, adata.var['mt']].X, axis=1).A1 / np.sum(adata.X, axis=1).A1 * 100
-    )
+    
+    # Use sparse-aware operations to avoid unnecessary dense conversions
+    if scipy.sparse.issparse(adata.X):
+        # For sparse matrices, use scanpy's built-in calculation which is optimized
+        mito_genes = adata.var['mt'].values
+        mito_counts = np.array(adata.X[:, mito_genes].sum(axis=1)).flatten()
+        total_counts = np.array(adata.X.sum(axis=1)).flatten()
+    else:
+        # For dense matrices
+        mito_counts = adata[:, adata.var['mt']].X.sum(axis=1)
+        total_counts = adata.X.sum(axis=1)
+    
+    # Calculate percentage, avoiding division by zero
+    adata.obs['pct_counts_mt'] = np.divide(
+        mito_counts, 
+        total_counts, 
+        out=np.zeros_like(mito_counts, dtype=float),
+        where=total_counts != 0
+    ) * 100
 
 def compute_complexity(adata):
     """ Compute complexity score for each cell """
@@ -276,6 +317,7 @@ def main():
     parser.add_argument('--csv', help='Path to long format CSV file (required for csv format)')
     parser.add_argument('--h5ad', help='Path to h5ad file (required for h5ad format)')
     parser.add_argument('--sample-name', help="Sample name to filter cells by (optional, for h5ad format only)")
+    parser.add_argument('--sample-column-name', help="Column name in h5ad .obs that contains sample identifiers (optional, for h5ad format only)")
     parser.add_argument('--sample-id', help="Sample ID to add as first column in output CSV")
     parser.add_argument('--species', type=str, required=True, help='Species (e.g., homo-sapiens)')
     parser.add_argument('--output', type=str, required=True, help='Output directory')
@@ -294,7 +336,7 @@ def main():
     elif args.format == 'h5ad':
         if not args.h5ad:
             parser.error("For h5ad format, --h5ad is required")
-        adata = load_data_h5ad(args.h5ad, args.sample_name)
+        adata = load_data_h5ad(args.h5ad, args.sample_name, args.sample_column_name)
 
     # Calculate QC metrics
     calculate_metrics(adata)

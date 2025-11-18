@@ -8,20 +8,26 @@ self.defineOutputs("geneSymbolsCsv")
 
 self.body(func(inputs) {
 	species := inputs.species
-	filteredGenesCountsCsv := inputs.filteredGenesCountsCsv
+	filteredGenesCountsCsvList := inputs.filteredGenesCountsCsvList
 
 	geneAsset := geneMap.getGeneAsset(species)
 	geneAssetName := geneMap.getAssetName(species)
 
-	geneSymbolsJob := exec.builder().
+	cmdBuilder := exec.builder().
 		software(assets.importSoftware("@platforma-open/milaboratories.import-sc-rnaseq-data.software:map-genes")).
 		mem("16GiB").
 		cpu(1).
 		addAsset(geneAsset, ".", geneAssetName).
-		addFile("rawCounts.csv", filteredGenesCountsCsv).
-		arg("--raw_counts").arg("rawCounts.csv").
 		arg("--annotation").arg(geneAssetName).
-		arg("--output").arg("geneSymbols.csv").
+		arg("--output").arg("geneSymbols.csv")
+
+	// Add all input files
+	for i, csvFile in filteredGenesCountsCsvList {
+		fileName := "rawCounts_" + string(i) + ".csv"
+		cmdBuilder.addFile(fileName, csvFile).arg("--raw_counts").arg(fileName)
+	}
+
+	geneSymbolsJob := cmdBuilder.
 		saveFile("geneSymbols.csv").
 		printErrStreamToStdout().
 		run()
