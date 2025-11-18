@@ -1,12 +1,15 @@
 import type { GraphMakerState } from '@milaboratories/graph-maker';
 import type { InferOutputsType, PColumnIdAndSpec, PlDataTableStateV2, PlRef } from '@platforma-sdk/model';
-import { BlockModel, createPlDataTableStateV2, createPlDataTableV2, isPColumn, isPColumnSpec } from '@platforma-sdk/model';
+import {
+  BlockModel,
+  createPlDataTableStateV2,
+  createPlDataTableV2,
+  isPColumn,
+  isPColumnSpec,
+} from '@platforma-sdk/model';
 
 export type BlockArgs = {
   datasetRef?: PlRef;
-  mtxDatasetRef?: PlRef;
-  h5adDatasetRef?: PlRef;
-  importMode: 'csv' | 'mtx' | 'h5ad';
   // name?: string;
 };
 
@@ -20,9 +23,7 @@ export type UiState = {
 
 export const model = BlockModel.create()
 
-  .withArgs<BlockArgs>({
-    importMode: 'csv',
-  })
+  .withArgs<BlockArgs>({})
 
   .withUiState<UiState>({
     tableState: createPlDataTableStateV2(),
@@ -41,66 +42,40 @@ export const model = BlockModel.create()
   })
 
   .argsValid((ctx) => {
-    const { importMode, datasetRef, mtxDatasetRef, h5adDatasetRef } = ctx.args;
-    if (importMode === 'csv') {
-      if (datasetRef === undefined) return false;
-      if (!ctx.uiState.allowRun) return false;
-    }
-
-    if (importMode === 'mtx') {
-      if (mtxDatasetRef === undefined) return false;
-    }
-
-    if (importMode === 'h5ad') {
-      if (h5adDatasetRef === undefined) return false;
-    }
-
-    return true;
+    const datasetRef = ctx.args.datasetRef;
+    return datasetRef !== undefined && datasetRef !== null;
   })
 
   .output('datasetOptions', (ctx) => {
     return ctx.resultPool.getOptions((v) => {
       if (!isPColumnSpec(v)) return false;
+
+      // Accept all three types: csv/tsv, h5ad, and mtx
       const domain = v.domain;
-      return (
-        v.name === 'pl7.app/sequencing/data'
-        && (v.valueType as string) === 'File'
-        && domain !== undefined
+      const hasRoleAxis = v.axesSpec?.some((axis) => axis.name === 'pl7.app/sc/cellRangerFileRole');
+
+      const isCsv = domain !== undefined
         && (domain['pl7.app/fileExtension'] === 'csv'
           || domain['pl7.app/fileExtension'] === 'csv.gz'
           || domain['pl7.app/fileExtension'] === 'tsv'
-          || domain['pl7.app/fileExtension'] === 'tsv.gz')
+          || domain['pl7.app/fileExtension'] === 'tsv.gz');
+
+      const isH5ad = domain !== undefined
+        && domain['pl7.app/fileExtension'] === 'h5ad';
+
+      const isMtx = hasRoleAxis;
+
+      return (
+        v.name === 'pl7.app/sequencing/data'
+        && (v.valueType as string) === 'File'
+        && (isCsv || isH5ad || isMtx)
       );
     },
     );
   })
 
-  .output('h5adDatasetOptions', (ctx) => {
-    return ctx.resultPool.getOptions((v) => {
-      if (!isPColumnSpec(v)) return false;
-      const domain = v.domain;
-      return (
-        v.name === 'pl7.app/sequencing/data'
-        && (v.valueType as string) === 'File'
-        && domain !== undefined
-        && (domain['pl7.app/fileExtension'] === 'h5ad')
-      );
-    },
-    );
-  })
-
-  .output('mtxDatasetOptions', (ctx) => {
-    return ctx.resultPool.getOptions((v) => {
-      if (!isPColumnSpec(v)) return false;
-      // Check if it has the cellRangerFileRole axis
-      const hasRoleAxis = v.axesSpec?.some((axis) => axis.name === 'pl7.app/sc/cellRangerFileRole');
-      return (
-        v.name === 'pl7.app/sequencing/data'
-        && (v.valueType as string) === 'File'
-        && hasRoleAxis
-      );
-    },
-    );
+  .retentiveOutput('data', (ctx) => {
+    return ctx.prerun?.resolve({ field: 'data', allowPermanentAbsence: true })?.getDataAsJson<unknown>();
   })
 
   .output('errorLog', (ctx) => {

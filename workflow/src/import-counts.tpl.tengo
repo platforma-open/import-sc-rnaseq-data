@@ -15,6 +15,7 @@ self.defineOutputs(
 	"rawCountsCsv",
 	"normCountsCsv",
 	"cellMetricsCsv"
+
 )
 
 self.body(func(inputs) {
@@ -24,12 +25,14 @@ self.body(func(inputs) {
 	fileExtension := inputs.fileExtension
 	geneFormat := inputs.geneFormat
 	importMode := string(inputs.importMode)
-
-	inputDataMeta := inputData.getDataAsJson()
+	samplesIdToLabelMap := inputs.samplesIdToLabelMap
+	sampleId := inputs[pConstants.KEY_FIELD_NAME][0]
 
 	fileFormat := ""
 	if importMode == "mtx" {
 		fileFormat = "mtx"
+	} else if (importMode == "h5ad" || importMode == "h5ad-multi-sample") {
+		fileFormat = "h5ad"
 	} else {
 		fileFormat = "xsv"
 	}
@@ -91,6 +94,19 @@ self.body(func(inputs) {
 				arg("--annotation").arg(geneAssetName)
 		}
 
+	} else if fileFormat == "h5ad" {
+		// H5AD format: get first sample
+		firstKey := maps.getKeys(inputMap)[0]
+		uniqueSampleData := inputMap[firstKey]
+		countMatrixCsv = countMatrixCsv.
+			addFile("inputCounts." + fileExtension, uniqueSampleData).
+			arg("--h5ad").arg("inputCounts." + fileExtension)
+		if importMode == "h5ad-multi-sample" {
+			sampleName := samplesIdToLabelMap[sampleId]
+			countMatrixCsv = countMatrixCsv.
+				arg("--sample-name").arg(sampleName)
+		}
+
 	} else if fileFormat == "mtx" {
 		// MTX format: use files extracted earlier
 		matrixExt := compression == "gz" ? ".gz" : ""
@@ -109,6 +125,7 @@ self.body(func(inputs) {
 	}
 	
 	countMatrixCsv = countMatrixCsv.
+		arg("--sample-id").arg(sampleId).
 		arg("--output").arg("counts.csv").
 		saveFile("counts.csv").
 		saveFile("counts_normalized.csv").
@@ -132,6 +149,19 @@ self.body(func(inputs) {
 			arg("--format").arg("csv").
 			addFile("rawCounts.csv", rawCounts).
 			arg("--csv").arg("rawCounts.csv")
+	} else if fileFormat == "h5ad" {
+		// H5AD format: get first sample
+		firstKey := maps.getKeys(inputMap)[0]
+		uniqueSampleData := inputMap[firstKey]
+		cellMetricsCsv = cellMetricsCsv.
+			arg("--format").arg("h5ad").
+			addFile("inputCounts." + fileExtension, uniqueSampleData).
+			arg("--h5ad").arg("inputCounts." + fileExtension)
+		if importMode == "h5ad-multi-sample" {
+			sampleName := samplesIdToLabelMap[sampleId]
+			cellMetricsCsv = cellMetricsCsv.
+				arg("--sample-name").arg(sampleName)
+		}
 	} else if fileFormat == "mtx" {
 		// MTX format: use files extracted earlier
 		matrixExt := compression == "gz" ? ".gz" : ""
@@ -150,6 +180,7 @@ self.body(func(inputs) {
 		
 	cellMetricsCsv = cellMetricsCsv.
 		arg("--species").arg(species).
+		arg("--sample-id").arg(sampleId).
 		arg("--output").arg(".").
 		saveFile("cell_metrics.csv").
 		printErrStreamToStdout().
@@ -165,6 +196,7 @@ self.body(func(inputs) {
 		arg("--raw_counts").arg("rawCounts.csv").
 		arg("--normalized_counts").arg("rawCounts_normalized.csv").
 		arg("--metrics").arg("cell_metrics.csv").
+		arg("--sample-id").arg(sampleId).
 		arg("--output_raw").arg("filtered_rawCounts.csv").
 		arg("--output_normalized").arg("filtered_rawCounts_normalized.csv").
 		saveFile("filtered_rawCounts.csv").

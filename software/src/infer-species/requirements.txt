@@ -1,3 +1,4 @@
 polars-lts-cpu==1.33.1
 pyarrow==21.0.0
 pandas==2.2.3
+scanpy==1.10.1

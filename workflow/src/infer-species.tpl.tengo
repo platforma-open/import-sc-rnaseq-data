@@ -53,7 +53,7 @@ self.body(func(inputs) {
 			ll.panic("Could not find features file in MTX input data")
 		}
 	} else {
-		// CSV format: get first sample
+		// CSV/H5AD format: get first sample
 		firstKey := maps.getKeys(dataMap)[0]
 		fileToAnalyze = dataMap[firstKey]
 	}
@@ -71,7 +71,7 @@ self.body(func(inputs) {
 			fileName = fileName + ".gz"
 		}
 	} else {
-		// CSV format: use raw counts file
+		// CSV/H5AD format: use a standardized file name
 		fileName = "rawCounts." + fileExtension
 	}
 

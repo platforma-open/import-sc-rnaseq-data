@@ -3,47 +3,56 @@ assets := import("@platforma-sdk/workflow-tengo:assets")
 render := import("@platforma-sdk/workflow-tengo:render")
 smart := import("@platforma-sdk/workflow-tengo:smart")
 pframes := import("@platforma-sdk/workflow-tengo:pframes")
-ll := import("@platforma-sdk/workflow-tengo:ll")
 
 processTpl := assets.importTemplate(":process")
 inferSpeciesTpl := assets.importTemplate(":infer-species")
-
-wf.setPreRun(assets.importTemplate(":prerun"))
+readInputTpl := assets.importTemplate(":read-input")
 
 wf.body(func(args) {
-	importMode := string(args.importMode)
 	blockId := wf.getBlockId()
 
-	// Resolve the correct input based on import mode
-	input := undefined
-	if importMode == "csv" {
-		input = wf.resolve(args.datasetRef, { errIfMissing: true })
-	} else if importMode == "mtx" {
-		input = wf.resolve(args.mtxDatasetRef, { errIfMissing: true })
-	} else if importMode == "h5ad" {
-		input = wf.resolve(args.h5adDatasetRef, { errIfMissing: true })
-	} else {
-		ll.panic("Unknown import mode: %v", importMode)
-	}
+	rawInput := wf.resolve(args.datasetRef, { errIfMissing: true })
 
-	// First infer species
+	bundleBuilder := wf.createPBundleBuilder()
+	bundleBuilder.addAnchor("main", args.datasetRef)
+	bundleBuilder.addMulti({
+		axes: [
+			{ anchor: "main", idx: 0 },
+			{ name: "pl7.app/sampleId", type: "String" }
+		],
+		name: "pl7.app/sequencing/data/sampleGroups",
+		domain: {
+			"pl7.app/block": { anchor: "main" },
+			"pl7.app/dataset": { anchor: "main" }
+		}
+	}, "linker")
+	bundle := bundleBuilder.build()
+	
+	readInputRun := render.createEphemeral(readInputTpl, {
+		inputData: rawInput.getFutureInputField("data"),
+		inputSpec: rawInput.getFutureInputField("spec"),
+		bundle: bundle
+	})
+	
+	importMode := readInputRun.output("importMode")
+
 	inferSpeciesRun := render.createEphemeral(inferSpeciesTpl, {
-		input: input.getFutureInputField("data"),
-		inputSpec: input.getFutureInputField("spec"),
+		input: rawInput.getFutureInputField("data"),
+		inputSpec: rawInput.getFutureInputField("spec"),
 		importMode: importMode
 	})
 
 	processRun := render.createEphemeral(processTpl, {
-		inputSpec: input.getFutureInputField("spec"),
-		inputData: input.getFutureInputField("data"),
+		inputSpec: readInputRun.output("spec"),
+		inputData: readInputRun.output("data"),
 		species: inferSpeciesRun.output("species"),
 		geneFormat: inferSpeciesRun.output("geneFormat"),
 		importMode: importMode,
+		bundle: bundle,
+		samplesIdToLabelMap: readInputRun.output("samplesMap"),
 
 		params: smart.createJsonResource({
 			blockId: blockId
-			// mem: args.mem,
-			// cpu: args.cpu
 		})
 	})
 

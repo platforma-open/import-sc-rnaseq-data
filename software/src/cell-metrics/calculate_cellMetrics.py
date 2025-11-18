@@ -135,6 +135,74 @@ def load_data_csv(csv_path):
     
     return adata
 
+def find_sample_column(obs_df, target_sample):
+    """
+    Finds the column in the .obs DataFrame that contains the target sample name.
+    Prioritizes columns with 'sample' in the name.
+    """
+    # Prioritize columns with 'sample' in the name, then check all others
+    candidate_columns = sorted(obs_df.columns, key=lambda col: 'sample' not in col.lower())
+
+    for col_name in candidate_columns:
+        # Check only string or categorical columns
+        if obs_df[col_name].dtype.name not in ['category', 'object']:
+            continue
+        
+        unique_values = set(obs_df[col_name].unique())
+        
+        # Check if the target sample is present in the column's unique values
+        if target_sample in unique_values:
+            print(f"Found sample column: '{col_name}' containing sample '{target_sample}'")
+            return col_name
+            
+    return None
+
+def load_data_h5ad(h5ad_path, sample_name=None):
+    """Load data from AnnData h5ad file.
+    
+    Args:
+        h5ad_path: Path to the h5ad file
+        sample_name: Optional sample name to filter cells by
+    """
+    print(f"Loading h5ad file: {h5ad_path}")
+    
+    # Load the h5ad file
+    adata = sc.read_h5ad(h5ad_path)
+    
+    # Filter by sample if sample_name is provided
+    if sample_name:
+        print(f"Filtering for sample: {sample_name}")
+        sample_column = find_sample_column(adata.obs, sample_name)
+        
+        if sample_column is None:
+            raise ValueError(f"Could not automatically identify the sample column containing '{sample_name}' in the h5ad file's .obs dataframe.")
+        
+        # Filter AnnData for the target sample
+        adata = adata[adata.obs[sample_column] == sample_name].copy()
+        
+        if adata.n_obs == 0:
+            raise ValueError(f"No cells found for sample '{sample_name}'.")
+        
+        print(f"Filtered to {adata.n_obs} cells for sample '{sample_name}'")
+    
+    print(f"AnnData shape: {adata.shape[0]} cells × {adata.shape[1]} genes")
+    
+    # Clean cell barcodes if needed
+    original_barcodes = list(adata.obs_names)
+    cleaned_barcodes = [clean_barcode_suffix(b) for b in original_barcodes]
+    
+    if cleaned_barcodes != original_barcodes:
+        print("Cleaning barcode suffixes...")
+        adata.obs_names = cleaned_barcodes
+        print(f"Example: {original_barcodes[0]} -> {cleaned_barcodes[0]}")
+    
+    # Check for gene_symbol in var
+    if 'gene_symbol' not in adata.var.columns:
+        # Use var_names as gene_symbol if not present
+        adata.var['gene_symbol'] = adata.var_names
+    
+    return adata
+
 def calculate_metrics(adata):
     """ Calculate basic QC metrics """
     sc.pp.calculate_qc_metrics(adata, percent_top=[20], log1p=False, inplace=True)
@@ -167,13 +235,19 @@ def classify_outliers(adata, factors):
 
     adata.obs['outlier'] = outliers_total_counts & outliers_n_genes & outliers_pct_top_20 & outliers_pct_mt
 
-def export_metrics(adata, output_dir, filename="cell_metrics.csv"):
+def export_metrics(adata, output_dir, filename="cell_metrics.csv", sample_id=None):
     """ Export QC metrics to a CSV file """
     os.makedirs(output_dir, exist_ok=True)
     output_path = os.path.join(output_dir, filename)
     metrics_df = adata.obs[['total_counts', 'n_genes_by_counts', 'pct_counts_mt', 'complexity', 'pct_counts_in_top_20_genes', 'outlier']]
     metrics_df.index.name = 'CellId'
-    metrics_df.reset_index().to_csv(output_path, index=False)
+    metrics_df = metrics_df.reset_index()
+    
+    if sample_id:
+        # Add SampleId as first column
+        metrics_df.insert(0, 'SampleId', sample_id)
+    
+    metrics_df.to_csv(output_path, index=False)
 
 def get_mito_prefix(species):
     """ Return mitochondrial gene prefix based on species """
@@ -194,12 +268,15 @@ def get_mito_prefix(species):
 
 def main():
     parser = argparse.ArgumentParser(description='Calculate QC metrics for scRNA-seq data.')
-    parser.add_argument('--format', required=True, choices=['mtx', 'csv'], 
-                       help="Input format: 'mtx' for 10X Genomics format, 'csv' for long format CSV")
+    parser.add_argument('--format', required=True, choices=['mtx', 'csv', 'h5ad'], 
+                       help="Input format: 'mtx' for 10X Genomics format, 'csv' for long format CSV, 'h5ad' for AnnData format")
     parser.add_argument('--matrix', help='Path to matrix.mtx.gz file (required for mtx format)')
     parser.add_argument('--barcodes', help='Path to barcodes.tsv.gz file (required for mtx format)')
     parser.add_argument('--features', help='Path to features.tsv.gz file (required for mtx format)')
     parser.add_argument('--csv', help='Path to long format CSV file (required for csv format)')
+    parser.add_argument('--h5ad', help='Path to h5ad file (required for h5ad format)')
+    parser.add_argument('--sample-name', help="Sample name to filter cells by (optional, for h5ad format only)")
+    parser.add_argument('--sample-id', help="Sample ID to add as first column in output CSV")
     parser.add_argument('--species', type=str, required=True, help='Species (e.g., homo-sapiens)')
     parser.add_argument('--output', type=str, required=True, help='Output directory')
 
@@ -214,6 +291,10 @@ def main():
         if not args.csv:
             parser.error("For csv format, --csv is required")
         adata = load_data_csv(args.csv)
+    elif args.format == 'h5ad':
+        if not args.h5ad:
+            parser.error("For h5ad format, --h5ad is required")
+        adata = load_data_h5ad(args.h5ad, args.sample_name)
 
     # Calculate QC metrics
     calculate_metrics(adata)
@@ -230,7 +311,7 @@ def main():
     classify_outliers(adata, factors)
 
     # Export QC metrics
-    export_metrics(adata, args.output)
+    export_metrics(adata, args.output, sample_id=args.sample_id)
 
 if __name__ == "__main__":
     main()

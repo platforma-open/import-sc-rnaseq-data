@@ -23,7 +23,7 @@
           "artifact": {
             "type": "python",
             "registry": "platforma-open",
-            "environment": "@platforma-open/milaboratories.runenv-python-3:3.12.10",
+            "environment": "@platforma-open/milaboratories.runenv-python-3:3.12.10-h5ad",
             "dependencies": {
               "toolset": "pip",
               "requirements": "requirements.txt"
@@ -108,24 +108,6 @@
           ]
         }
       },
-      "filter-genes": {
-        "binary": {
-          "artifact": {
-            "type": "python",
-            "registry": "platforma-open",
-            "environment": "@platforma-open/milaboratories.runenv-python-3:3.12.10",
-            "dependencies": {
-              "toolset": "pip",
-              "requirements": "requirements.txt"
-            },
-            "root": "./src/filter-genes"
-          },
-          "cmd": [
-            "python",
-            "{pkg}/filter_genes.py"
-          ]
-        }
-      },
       "infer-species": {
         "binary": {
           "artifact": {
@@ -159,6 +141,24 @@
           "cmd": [
             "python",
             "{pkg}/calculate_sample_metrics.py"
+          ]
+        }
+      },
+      "merge-csv": {
+        "binary": {
+          "artifact": {
+            "type": "python",
+            "registry": "platforma-open",
+            "environment": "@platforma-open/milaboratories.runenv-python-3:3.12.10",
+            "dependencies": {
+              "toolset": "pip",
+              "requirements": "requirements.txt"
+            },
+            "root": "./src/merge-csv"
+          },
+          "cmd": [
+            "python",
+            "{pkg}/merge_csv.py"
           ]
         }
       }
