@@ -47,7 +47,7 @@ def clean_gene_name(gene_name):
     gene_name = gene_name.replace('\n', '').replace('\r', '').replace('\t', '')
     
     # Remove other control characters (ASCII 0-31 except space)
-    gene_name = ''.join(char for char in gene_name if ord(char) >= 32 or char == ' ')
+    gene_name = ''.join(char for char in gene_name if ord(char) >= 32)
     
     # Strip leading/trailing whitespace
     gene_name = gene_name.strip()

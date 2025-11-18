@@ -141,8 +141,7 @@ def find_sample_column(obs_df, target_sample):
     Prioritizes columns with 'sample' in the name.
     """
     # Prioritize columns with 'sample' in the name, then check all others
-    candidate_columns = [col for col in obs_df.columns if 'sample' in col.lower()]
-    candidate_columns.extend([col for col in obs_df.columns if col not in candidate_columns])
+    candidate_columns = sorted(obs_df.columns, key=lambda col: 'sample' not in col.lower())
 
     for col_name in candidate_columns:
         # Check only string or categorical columns
