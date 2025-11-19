@@ -162,7 +162,7 @@
           "artifact": {
             "type": "docker",
             "context": "./src/counts-seurat",
-            "dockerfile": "Dockerfile"
+            "dockerfile": "./src/counts-seurat/Dockerfile"
           },
           "cmd": [
             "/app/extract_counts.R"
@@ -186,7 +186,7 @@
           "artifact": {
             "type": "docker",
             "context": "./src/infer-species-seurat",
-            "dockerfile": "/src/infer-species-seurat/Dockerfile"
+            "dockerfile": "./src/infer-species-seurat/Dockerfile"
           },
           "cmd": [
             "/app/infer_species.R"
