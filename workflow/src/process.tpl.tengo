@@ -24,6 +24,7 @@ self.awaitState("params", "ResourceReady")
 self.awaitState("inputSpec", "ResourceReady")
 self.awaitState("species", "ResourceReady")
 self.awaitState("geneFormat", "ResourceReady")
+self.awaitState("sampleColumnName", "ResourceReady")
 
 self.body(func(inputs) {
 	blockId := inputs.params.blockId
@@ -34,6 +35,7 @@ self.body(func(inputs) {
 	inputSpec := inputs.inputSpec
 	inputData := inputs.inputData
 	samplesIdToLabelMap := inputs.samplesIdToLabelMap
+	sampleColumnName := inputs.sampleColumnName
 
 	fileExtension := inputSpec.domain["pl7.app/fileExtension"]
 	sampleAxisSpec :=  inputSpec.axesSpec[0]
@@ -61,7 +63,8 @@ self.body(func(inputs) {
 				geneFormat: geneFormat,
 				importMode: importMode,
 				compression: compression,
-				samplesIdToLabelMap: samplesIdToLabelMap
+				samplesIdToLabelMap: samplesIdToLabelMap,
+				sampleColumnName: sampleColumnName
 			}
 			// ,
 			// metaExtra: {
@@ -89,21 +92,33 @@ self.body(func(inputs) {
 
 	// Build pFrame from rawCounts to pass directly to ptabler
 	rawCountsPf := pframes.pFrameBuilder()
-	rawCountsPf.add("rawCounts", importingCountsResults.outputSpec("rawCounts", "rawCounts"), importingCountsResults.outputData("rawCounts", "rawCounts"))
+	rawCountsPf.add("rawCounts", importingCountsResults.outputSpec("rawCounts", "rawCounts"),
+		importingCountsResults.outputData("rawCounts", "rawCounts"))
 	rawCountsPfBuilt := rawCountsPf.build()
 
-	// Get results summary and gene symbols from collect-results
+
 	resultsSummaryCsvData := collectResults.outputData("resultsSummaryCsv")
 	resultsSummaryCsv := resultsSummaryCsvData.getFutureInputField(string(json.encode([])))
-
 	resultsSummaryConvParams := resultsSummaryConv.getColumns(blockId, species, inputSpec)
-	resultsSummaryPf := xsv.importFile(resultsSummaryCsv, "csv", resultsSummaryConvParams, { mem: "16GiB", cpu: 1 })
+	resultsSummaryPf := xsv.importFile(resultsSummaryCsv, "csv", resultsSummaryConvParams, {})
 
 	geneSymbolsCsvData := collectResults.outputData("geneSymbolsCsv")
 	geneSymbolsCsv := geneSymbolsCsvData.getFutureInputField(string(json.encode([])))
-
 	geneSymbolsImportParams := pfSymbolsConv.getColumns(species)
-	geneSymbolsPf := xsv.importFile(geneSymbolsCsv, "csv", geneSymbolsImportParams, { mem: "16GiB", cpu: 1 })
+	geneSymbolsPf := xsv.importFile(geneSymbolsCsv, "csv", geneSymbolsImportParams,{})
+
+	// // Highly Variable Genes calculation
+	// hvgResults := render.create(hvgTpl, {
+	// 	csvCounts: filteredGenesCountsCsv,
+	// 	normCounts: filteredGenesNormalizedCountsCsv
+	// })
+
+	// hvgCountsCsv := hvgResults.output("hvgCountsCsv")
+	// hvgNormalizedCountsCsv := hvgResults.output("hvgNormalizedCountsCsv")
+
+	// // Convert to pFrames
+	// hvgCountsPf := xsv.importFile(hvgCountsCsv, "csv", countCsvParams, { mem: "16GiB", cpu: 1 })
+	// hvgNormCountsPf := xsv.importFile(hvgNormalizedCountsCsv, "csv", normCountCsvParams, { mem: "16GiB", cpu: 1 })
 
 	trace := pSpec.makeTrace(inputSpec, makeTraceStep(blockId))
 

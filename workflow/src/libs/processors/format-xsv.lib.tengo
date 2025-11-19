@@ -1,0 +1,38 @@
+maps := import("@platforma-sdk/workflow-tengo:maps")
+
+getFirstFile := func(inputMap) {
+	firstKey := maps.getKeys(inputMap)[0]
+	return inputMap[firstKey]
+}
+
+buildContext := func(inputs, inputMap, geneMap) {
+	return {
+		fileExtension: inputs.fileExtension,
+		geneFormat: inputs.geneFormat,
+		geneAsset: geneMap.getGeneAsset(inputs.species),
+		geneAssetName: geneMap.getAssetName(inputs.species)
+	}
+}
+
+prepareCountMatrixArgs := func(builder, inputMap, context) {
+	uniqueSampleData := getFirstFile(inputMap)
+	
+	builder = builder.
+		addFile("inputCounts." + context.fileExtension, uniqueSampleData).
+		arg("--xsv").arg("inputCounts." + context.fileExtension).
+		arg("--gene-format").arg(context.geneFormat)
+
+	if context.geneFormat == "gene symbol" {
+		builder = builder.
+			addAsset(context.geneAsset, ".", context.geneAssetName).
+			arg("--annotation").arg(context.geneAssetName)
+	}
+
+	return builder
+}
+
+export {
+	buildContext: buildContext,
+	prepareCountMatrixArgs: prepareCountMatrixArgs
+}
+

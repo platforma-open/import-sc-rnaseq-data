@@ -26,8 +26,15 @@ wf.body(func(args) {
 			outputs: {},
 			exports: {}
 		}
-	} else if (importMode == "h5ad") {
+	} else if (importMode == "h5ad" || importMode == "h5ad-multi-sample") {
 		// Skip check for H5AD format (not implemented yet)
+		// Return empty outputs - errorLog will be undefined and allowed by model
+		return {
+			outputs: {},
+			exports: {}
+		}
+	} else if (importMode == "seurat" || importMode == "seurat-multi-sample") {
+		// Skip check for Seurat format (not implemented yet)
 		// Return empty outputs - errorLog will be undefined and allowed by model
 		return {
 			outputs: {},

@@ -15,8 +15,6 @@ self.body(func(inputs) {
 	inputMap := inputData.inputs()
 	species := inputs.species
 
-	ll.print("DBG: collect-results - processing %v samples", len(inputMap))
-
 	// Build results summary job
 	resultsSummaryBuilder := exec.builder().
 		software(assets.importSoftware("@platforma-open/milaboratories.import-sc-rnaseq-data.software:results-summary")).
@@ -25,6 +23,7 @@ self.body(func(inputs) {
 		arg("-o").arg("sample_metrics.csv")
 
 	// Build map genes job
+	ll.print("DBG: species: %v", species)
 	geneAsset := geneMap.getGeneAsset(species)
 	geneAssetName := geneMap.getAssetName(species)
 

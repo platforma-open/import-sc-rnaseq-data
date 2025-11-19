@@ -1,129 +1,81 @@
 self := import("@platforma-sdk/workflow-tengo:tpl")
 
-json := import("json")
 ll := import("@platforma-sdk/workflow-tengo:ll")
 exec := import("@platforma-sdk/workflow-tengo:exec")
 assets := import("@platforma-sdk/workflow-tengo:assets")
-maps := import("@platforma-sdk/workflow-tengo:maps")
 pConstants := import("@platforma-sdk/workflow-tengo:pframes.constants")
 
 geneMap := import(":libs.gene-map")
 
+// Import format-specific processors
+formatXsv := import(":libs.processors.format-xsv")
+formatH5ad := import(":libs.processors.format-h5ad")
+formatMtx := import(":libs.processors.format-mtx")
+formatSeurat := import(":libs.processors.format-seurat")
 
+formatProcessors := {
+	"xsv": formatXsv,
+	"h5ad": formatH5ad,
+	"mtx": formatMtx,
+	"seurat": formatSeurat
+}
 
 self.defineOutputs(
 	"rawCountsCsv",
 	"normCountsCsv",
 	"cellMetricsCsv"
-
 )
 
 self.body(func(inputs) {
+	// Extract basic inputs
 	inputData := inputs[pConstants.VALUE_FIELD_NAME]
-	compressionLoaded := inputs.compression
-	species := inputs.species
-	fileExtension := inputs.fileExtension
-	geneFormat := inputs.geneFormat
 	importMode := string(inputs.importMode)
-	samplesIdToLabelMap := inputs.samplesIdToLabelMap
 	sampleId := inputs[pConstants.KEY_FIELD_NAME][0]
 
+	// Determine file format
 	fileFormat := ""
 	if importMode == "mtx" {
 		fileFormat = "mtx"
 	} else if (importMode == "h5ad" || importMode == "h5ad-multi-sample") {
 		fileFormat = "h5ad"
+	} else if (importMode == "seurat" || importMode == "seurat-multi-sample") {
+		fileFormat = "seurat"
 	} else {
 		fileFormat = "xsv"
 	}
 
 	inputMap := inputData.inputs()
 
-	matrixFile := undefined
-	barcodesFile := undefined
-	featuresFile := undefined
-	compression := ""
-
-	if importMode == "mtx" {
-		compression = compressionLoaded
-		
-		if len(maps.getKeys(inputMap)) != 3 {
-			ll.panic("ERROR: Expected 3 files for MTX format, got %v", len(maps.getKeys(inputMap)))
-		}
-		
-		// Get all keys from input map and decode them
-		for sKey in maps.getKeys(inputMap) {
-			key := json.decode(sKey)
-
-			if key[0] == "barcodes.tsv" {
-				barcodesFile = inputMap[sKey]
-			} else if key[0] == "features.tsv" {
-				featuresFile = inputMap[sKey]
-			} else if key[0] == "matrix.mtx" {
-				matrixFile = inputMap[sKey]
-			}
-		}
+	// Select processor based on file format
+	processor := formatProcessors[fileFormat]
+	if is_undefined(processor) {
+		ll.panic("ERROR: Unsupported file format: %v", fileFormat)
 	}
 
-	geneAsset := geneMap.getGeneAsset(species)
-	geneAssetName := geneMap.getAssetName(species)
+	// Build format-specific context using processor
+	context := processor.buildContext(inputs, inputMap, geneMap)
 
-	mem := !is_undefined(inputs.mem) ? string(inputs.mem) + "GiB" : "4GiB"
+	mem := !is_undefined(inputs.mem) ? string(inputs.mem) + "GiB" : "8GiB"
 	cpu := !is_undefined(inputs.cpu) ? inputs.cpu : 1
 
-	// @TODO: migrate to polars
-	countMatrixCsv := exec.builder().
-		software(assets.importSoftware("@platforma-open/milaboratories.import-sc-rnaseq-data.software:counts-csv")).
+	countMatrixCsv := exec.builder()
+	// Select software based on format
+	if fileFormat == "seurat" {
+		countMatrixCsv = countMatrixCsv.
+			software(assets.importSoftware("@platforma-open/milaboratories.import-sc-rnaseq-data.software:counts-seurat"))
+	} else {
+		countMatrixCsv = countMatrixCsv.
+			software(assets.importSoftware("@platforma-open/milaboratories.import-sc-rnaseq-data.software:counts-csv"))
+	}
+	
+	// Generate count matrix CSV using processor
+	countMatrixCsv = countMatrixCsv.
 		mem(mem).
 		cpu(cpu).
 		arg("--format").arg(fileFormat)
 
-	if fileFormat == "xsv" {
-		// CSV format: get first sample
-		firstKey := maps.getKeys(inputMap)[0]
-		uniqueSampleData := inputMap[firstKey]
-		
-		countMatrixCsv = countMatrixCsv.
-			addFile("inputCounts." + fileExtension, uniqueSampleData).
-			arg("--xsv").arg("inputCounts." + fileExtension).
-			arg("--gene-format").arg(geneFormat)
+	countMatrixCsv = processor.prepareCountMatrixArgs(countMatrixCsv, inputMap, context)
 
-		if geneFormat == "gene symbol" {
-			countMatrixCsv = countMatrixCsv.
-				addAsset(geneAsset, ".", geneAssetName).
-				arg("--annotation").arg(geneAssetName)
-		}
-
-	} else if fileFormat == "h5ad" {
-		// H5AD format: get first sample
-		firstKey := maps.getKeys(inputMap)[0]
-		uniqueSampleData := inputMap[firstKey]
-		countMatrixCsv = countMatrixCsv.
-			addFile("inputCounts." + fileExtension, uniqueSampleData).
-			arg("--h5ad").arg("inputCounts." + fileExtension)
-		if importMode == "h5ad-multi-sample" {
-			sampleName := samplesIdToLabelMap[sampleId]
-			countMatrixCsv = countMatrixCsv.
-				arg("--sample-name").arg(sampleName)
-		}
-
-	} else if fileFormat == "mtx" {
-		// MTX format: use files extracted earlier
-		matrixExt := compression == "gz" ? ".gz" : ""
-		barcodesExt := compression == "gz" ? ".gz" : ""
-		featuresExt := compression == "gz" ? ".gz" : ""
-		
-		countMatrixCsv = countMatrixCsv.
-			addFile("matrix.mtx" + matrixExt, matrixFile).
-			addFile("barcodes.tsv" + barcodesExt, barcodesFile).
-			addFile("features.tsv" + featuresExt, featuresFile).
-			arg("--matrix").arg("matrix.mtx" + matrixExt).
-			arg("--barcodes").arg("barcodes.tsv" + barcodesExt).
-			arg("--features").arg("features.tsv" + featuresExt)
-	} else if fileFormat == "" {
-		ll.panic("ERROR: Unsupported file format: %v", fileExtension)
-	}
-	
 	countMatrixCsv = countMatrixCsv.
 		arg("--sample-id").arg(sampleId).
 		arg("--output").arg("counts.csv").
@@ -135,57 +87,22 @@ self.body(func(inputs) {
 	rawCounts := countMatrixCsv.getFile("counts.csv")
 	normCounts := countMatrixCsv.getFile("counts_normalized.csv")
 
-	// Set default memory and CPU for imports
-    defaultConvMem := "4GiB" // @TODO: set based on the size of the input
-    defaultConvCpu := 1 // @TODO: set based on the size of the input
-	
+	// Generate cell metrics CSV using processor
 	cellMetricsCsv := exec.builder().
 		software(assets.importSoftware("@platforma-open/milaboratories.import-sc-rnaseq-data.software:cell-metrics")).
 		mem(mem).
-		cpu(cpu)
-
-	if fileFormat == "xsv" {
-		cellMetricsCsv = cellMetricsCsv.
-			arg("--format").arg("csv").
-			addFile("rawCounts.csv", rawCounts).
-			arg("--csv").arg("rawCounts.csv")
-	} else if fileFormat == "h5ad" {
-		// H5AD format: get first sample
-		firstKey := maps.getKeys(inputMap)[0]
-		uniqueSampleData := inputMap[firstKey]
-		cellMetricsCsv = cellMetricsCsv.
-			arg("--format").arg("h5ad").
-			addFile("inputCounts." + fileExtension, uniqueSampleData).
-			arg("--h5ad").arg("inputCounts." + fileExtension)
-		if importMode == "h5ad-multi-sample" {
-			sampleName := samplesIdToLabelMap[sampleId]
-			cellMetricsCsv = cellMetricsCsv.
-				arg("--sample-name").arg(sampleName)
-		}
-	} else if fileFormat == "mtx" {
-		// MTX format: use files extracted earlier
-		matrixExt := compression == "gz" ? ".gz" : ""
-		barcodesExt := compression == "gz" ? ".gz" : ""
-		featuresExt := compression == "gz" ? ".gz" : ""
-		
-		cellMetricsCsv = cellMetricsCsv.
-			arg("--format").arg(fileFormat).
-			addFile("matrix.mtx" + matrixExt, matrixFile).
-			addFile("barcodes.tsv" + barcodesExt, barcodesFile).
-			addFile("features.tsv" + featuresExt, featuresFile).
-			arg("--matrix").arg("matrix.mtx" + matrixExt).
-			arg("--barcodes").arg("barcodes.tsv" + barcodesExt).
-			arg("--features").arg("features.tsv" + featuresExt)
-	}
-		
-	cellMetricsCsv = cellMetricsCsv.
-		arg("--species").arg(species).
+		cpu(cpu).
+		arg("--format").arg("csv").
+		arg("--csv").arg("rawCounts.csv").
+		addFile("rawCounts.csv", rawCounts).
+		arg("--species").arg(inputs.species).
 		arg("--sample-id").arg(sampleId).
 		arg("--output").arg(".").
 		saveFile("cell_metrics.csv").
 		printErrStreamToStdout().
 		run()
 
+	// Filter cells based on metrics
 	filteredCellsCountsCsv := exec.builder().
 		software(assets.importSoftware("@platforma-open/milaboratories.import-sc-rnaseq-data.software:filter-cells")).
 		mem(mem).

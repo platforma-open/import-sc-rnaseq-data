@@ -50,6 +50,7 @@ wf.body(func(args) {
 		importMode: importMode,
 		bundle: bundle,
 		samplesIdToLabelMap: readInputRun.output("samplesMap"),
+		sampleColumnName: readInputRun.output("sampleColumnName"),
 
 		params: smart.createJsonResource({
 			blockId: blockId

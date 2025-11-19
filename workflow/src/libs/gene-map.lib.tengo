@@ -16,6 +16,7 @@ speciesNamesMap := {
 }
 
 getAssetName := func(species){
+	ll.print("DBG: species: %v", species)
 	name := speciesNamesMap[species]
 
 	if is_undefined(name) {
@@ -26,6 +27,7 @@ getAssetName := func(species){
 }
 
 getGeneAsset := func(species) {
+	ll.print("DBG: species: %v", species)
 	if species == "arabidopsis-thaliana" {
 		return assets.importAsset("@platforma-open/milaboratories.gene-annotations-assets:arabidopsis-thaliana")
 	} else if species == "bos-taurus" {

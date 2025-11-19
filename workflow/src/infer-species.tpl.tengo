@@ -53,7 +53,7 @@ self.body(func(inputs) {
 			ll.panic("Could not find features file in MTX input data")
 		}
 	} else {
-		// CSV/H5AD format: get first sample
+		// CSV/H5AD/Seurat format: get first sample
 		firstKey := maps.getKeys(dataMap)[0]
 		fileToAnalyze = dataMap[firstKey]
 	}
@@ -71,17 +71,32 @@ self.body(func(inputs) {
 			fileName = fileName + ".gz"
 		}
 	} else {
-		// CSV/H5AD format: use a standardized file name
+		// CSV/H5AD/Seurat format: use a standardized file name
 		fileName = "rawCounts." + fileExtension
 	}
 
-	inferSpeciesJob := exec.builder().
-		software(assets.importSoftware("@platforma-open/milaboratories.import-sc-rnaseq-data.software:infer-species")).
+	inferSpeciesJob := exec.builder()
+
+	// Select software based on format
+	useSeuratSoftware := false
+	if format == "seurat" || format == "seurat-multi-sample" {
+		format = "seurat"
+		useSeuratSoftware = true
+		inferSpeciesJob = inferSpeciesJob.
+			software(assets.importSoftware("@platforma-open/milaboratories.import-sc-rnaseq-data.software:infer-species-seurat"))
+	} else {
+		inferSpeciesJob = inferSpeciesJob.
+			software(assets.importSoftware("@platforma-open/milaboratories.import-sc-rnaseq-data.software:infer-species"))
+	}
+
+	inferSpeciesJob = inferSpeciesJob.
 		mem("16GiB").
 		cpu(1).
 		addFile(fileName, fileToAnalyze).
 		arg(fileName).
-		arg("--format").arg(format).
+		arg("--format").arg(format)
+
+	inferSpeciesJob = inferSpeciesJob.
 		saveFileContent("species.txt").
 		saveFileContent("gene_format.txt").
 		printErrStreamToStdout().

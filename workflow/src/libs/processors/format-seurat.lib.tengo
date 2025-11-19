@@ -1,0 +1,47 @@
+maps := import("@platforma-sdk/workflow-tengo:maps")
+pConstants := import("@platforma-sdk/workflow-tengo:pframes.constants")
+
+getFirstFile := func(inputMap) {
+	firstKey := maps.getKeys(inputMap)[0]
+	return inputMap[firstKey]
+}
+
+addSeuratFile := func(builder, inputMap, context) {
+	uniqueSampleData := getFirstFile(inputMap)
+	return builder.
+		addFile("inputCounts." + context.fileExtension, uniqueSampleData).
+		arg("--format").arg("seurat").
+		arg("--rds").arg("inputCounts." + context.fileExtension)
+}
+
+addMultiSampleArgs := func(builder, context) {
+	if context.importMode == "seurat-multi-sample" {
+		builder = builder.arg("--sample-name").arg(context.sampleName)
+		if !is_undefined(context.sampleColumnName) && context.sampleColumnName != "" {
+			builder = builder.arg("--sample-column-name").arg(context.sampleColumnName)
+		}
+	}
+	return builder
+}
+
+buildContext := func(inputs, inputMap, geneMap) {
+	sampleId := inputs[pConstants.KEY_FIELD_NAME][0]
+	return {
+		fileExtension: inputs.fileExtension,
+		importMode: string(inputs.importMode),
+		sampleName: inputs.samplesIdToLabelMap[sampleId],
+		sampleColumnName: inputs.sampleColumnName
+	}
+}
+
+prepareCountMatrixArgs := func(builder, inputMap, context) {
+	builder = addSeuratFile(builder, inputMap, context)
+	builder = addMultiSampleArgs(builder, context)
+	return builder
+}
+
+export {
+	buildContext: buildContext,
+	prepareCountMatrixArgs: prepareCountMatrixArgs
+}
+

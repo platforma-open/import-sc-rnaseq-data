@@ -1,10 +1,61 @@
 import argparse
 import pandas as pd
+import polars as pl
 import scipy.io
 import gzip
 import scanpy as sc
 import anndata
-from pathlib import Path 
+from pathlib import Path
+from datetime import datetime
+from io import BytesIO 
+
+def write_csv_chunked(df, output_path, chunk_size=500000):
+    """Write DataFrame to CSV using Polars for optimized performance.
+    
+    Args:
+        df: Pandas DataFrame to write
+        output_path: Path to output CSV file
+        chunk_size: Number of rows to write per chunk (default: 1000000)
+    """
+    start_time = datetime.now()
+    total_rows = len(df)
+    
+    if total_rows == 0:
+        # Convert to Polars and write empty DataFrame with headers only
+        pl_df = pl.from_pandas(df)
+        pl_df.write_csv(output_path)
+        print(f"[{start_time.strftime('%Y-%m-%d %H:%M:%S')}] Written empty DataFrame with headers to {output_path}")
+        return
+    
+    print(f"[{start_time.strftime('%Y-%m-%d %H:%M:%S')}] Converting to Polars and writing CSV in chunks of {chunk_size:,} rows...")
+    
+    # Convert pandas DataFrame to Polars DataFrame
+    conversion_start = datetime.now()
+    pl_df = pl.from_pandas(df)
+    conversion_time = (datetime.now() - conversion_start).total_seconds()
+    print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Converted to Polars DataFrame in {conversion_time:.1f}s")
+    
+    # Write in chunks using Polars
+    if total_rows <= chunk_size:
+        # Small enough to write in one go
+        pl_df.write_csv(output_path)
+    else:
+        # Write in chunks using BytesIO buffer
+        with open(output_path, 'w') as f:
+            # Write header and first chunk
+            f.write(",".join(pl_df.columns) + "\n")
+            for i in range(0, len(pl_df), chunk_size):
+                batch = pl_df.slice(i, chunk_size)
+                batch.write_csv(f, include_header=False)
+                written_rows = min(i + chunk_size, total_rows)
+                if (i // chunk_size) % 10 == 0 or written_rows == total_rows:
+                    current_time = datetime.now()
+                    elapsed = (current_time - start_time).total_seconds()
+                    print(f"[{current_time.strftime('%Y-%m-%d %H:%M:%S')}] Written {written_rows:,} / {total_rows:,} rows ({100 * written_rows / total_rows:.1f}%) - Elapsed: {elapsed:.1f}s")
+        
+    end_time = datetime.now()
+    elapsed_time = (end_time - start_time).total_seconds()
+    print(f"[{end_time.strftime('%Y-%m-%d %H:%M:%S')}] Completed writing {total_rows:,} rows to {output_path} - Total time: {elapsed_time:.1f}s")
 
 def read_gzip_tsv(file_path):
     """Reads a gzipped TSV file into a pandas DataFrame."""
@@ -93,7 +144,7 @@ def process_input_files(matrix_path, barcodes_path, features_path, output_csv_pa
         df = pd.DataFrame(data, columns=["CellId", "GeneId", "Count"])
 
     print(f"Writing raw count matrix to {output_csv_path}...")
-    df.to_csv(output_csv_path, index=False)
+    write_csv_chunked(df, output_csv_path)
 
     # Normalize counts
     print("Normalizing counts...")
@@ -125,7 +176,7 @@ def process_input_files(matrix_path, barcodes_path, features_path, output_csv_pa
     normalized_output_csv_path = output_csv_path.replace(".csv", "_normalized.csv")
 
     print(f"Writing normalized count matrix to {normalized_output_csv_path}...")
-    norm_df.to_csv(normalized_output_csv_path, index=False)
+    write_csv_chunked(norm_df, normalized_output_csv_path)
 
     print("Done!")
 
@@ -335,7 +386,7 @@ def process_csv_file(csv_path, output_csv_path, gene_format=None, annotation_pat
     df_long = handle_duplicate_combinations(df_long)
     
     print(f"Writing raw count matrix to {output_csv_path}...")
-    df_long.to_csv(output_csv_path, index=False)
+    write_csv_chunked(df_long, output_csv_path)
     
     # Normalize counts
     print("Normalizing counts...")
@@ -375,7 +426,7 @@ def process_csv_file(csv_path, output_csv_path, gene_format=None, annotation_pat
     normalized_output_csv_path = output_csv_path.replace(".csv", "_normalized.csv")
     
     print(f"Writing normalized count matrix to {normalized_output_csv_path}...")
-    norm_df.to_csv(normalized_output_csv_path, index=False)
+    write_csv_chunked(norm_df, normalized_output_csv_path)
     
     print("Done!")
 
@@ -490,7 +541,7 @@ def process_h5ad_file(h5ad_path, output_csv_path, sample_name=None, sample_id=No
     df_raw = handle_duplicate_combinations(df_raw)
     
     print(f"Writing raw count matrix to {output_csv_path}...")
-    df_raw.to_csv(output_csv_path, index=False)
+    write_csv_chunked(df_raw, output_csv_path)
     
     # Normalize counts
     print("Normalizing counts...")
@@ -533,7 +584,7 @@ def process_h5ad_file(h5ad_path, output_csv_path, sample_name=None, sample_id=No
     normalized_output_csv_path = output_csv_path.replace(".csv", "_normalized.csv")
     
     print(f"Writing normalized count matrix to {normalized_output_csv_path}...")
-    norm_df.to_csv(normalized_output_csv_path, index=False)
+    write_csv_chunked(norm_df, normalized_output_csv_path)
     
     print("Done!")
 
