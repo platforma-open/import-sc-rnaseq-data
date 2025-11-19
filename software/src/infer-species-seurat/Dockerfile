@@ -37,18 +37,22 @@ WORKDIR /app
 
 RUN R -e "install.packages('renv', repos = 'https://cloud.r-project.org')"
 
-# Copy files
+# .Rprofile breaks renv restore
+# Copy only files that are needed
 COPY *.R .
-COPY requirements.txt ./requirements.txt
+COPY ./renv.lock ./renv.lock
 
-# Install R packages from requirements.txt
-RUN R -e "packages <- readLines('requirements.txt'); packages <- packages[packages != '']; install.packages(packages, repos = 'https://cloud.r-project.org', dependencies = TRUE)" \
+# Have to use absolute paths because during execution the working directory will be changed
+# and realpath command does not work
+ENV RENV_PATHS_RENV=/app/renv
+ENV RENV_PATHS_LOCKFILE=/app/renv.lock
+
+RUN R --no-echo -e "renv::restore(clean = TRUE)" \
     && find /root/.cache/R -name keys.html -delete \
     && find /usr/local/lib/R -name keys.html -delete
 
-# Make R script executable
-RUN chmod +x infer_species.R
+RUN echo "#!/bin/bash\nR --no-echo --no-restore -e \"renv::restore()\"\n\"\$@\"" > /app/run.sh
+RUN chmod +x /app/run.sh
 
 # Default command runs Rscript
-ENTRYPOINT ["Rscript"]
-
+ENTRYPOINT ["/app/run.sh"]
