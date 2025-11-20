@@ -1,5 +1,8 @@
 import polars as pl
 import argparse
+import os
+import sys
+from datetime import datetime
 
 SAMPLE_COLUMN_NAME = "SampleId"
 CELL_COLUMN_NAME = "CellId"
@@ -82,6 +85,15 @@ def map_ensembl_to_gene_symbol(raw_counts_paths, annotation_path, output_path):
 
 
 if __name__ == "__main__":
+    # Setup timing logging
+    script_name = os.path.splitext(os.path.basename(__file__))[0]
+    log_file = f"{script_name}.time.log"
+    start_time = datetime.now()
+    
+    with open(log_file, 'w') as f:
+        f.write(f"Script: {script_name}\n")
+        f.write(f"Start time: {start_time.strftime('%Y-%m-%d %H:%M:%S')}\n")
+    
     parser = argparse.ArgumentParser(description="Map Ensembl IDs in single-cell RNA-seq count data to gene symbols.")
     parser.add_argument("--raw_counts", required=True, action='append', dest='raw_counts_files',
                        help="Path to raw count CSV file (can be specified multiple times)")
@@ -89,4 +101,23 @@ if __name__ == "__main__":
     parser.add_argument("--output", required=True, help="Path to output CSV file with Ensembl Id and Gene symbol")
 
     args = parser.parse_args()
-    map_ensembl_to_gene_symbol(args.raw_counts_files, args.annotation, args.output)
+    
+    try:
+        map_ensembl_to_gene_symbol(args.raw_counts_files, args.annotation, args.output)
+    except Exception as e:
+        # Log end time even on error
+        end_time = datetime.now()
+        duration = end_time - start_time
+        with open(log_file, 'a') as f:
+            f.write(f"End time: {end_time.strftime('%Y-%m-%d %H:%M:%S')}\n")
+            f.write(f"Total duration: {duration.total_seconds():.2f} seconds ({duration})\n")
+            f.write(f"Status: ERROR - {str(e)}\n")
+        raise
+    
+    # Log end time and duration
+    end_time = datetime.now()
+    duration = end_time - start_time
+    
+    with open(log_file, 'a') as f:
+        f.write(f"End time: {end_time.strftime('%Y-%m-%d %H:%M:%S')}\n")
+        f.write(f"Total duration: {duration.total_seconds():.2f} seconds ({duration})\n")

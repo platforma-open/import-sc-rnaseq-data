@@ -154,13 +154,22 @@ tryCatch({
     gene_format <- "unknown"
   }
   
+  # Calculate data size: rows = genes, columns = cells
+  num_genes <- nrow(counts)
+  num_cells <- ncol(counts)
+  
   # Write species output
   cat(paste("Inferred species:", result$species, "\n"), file = stderr())
   cat(paste("Gene format:", gene_format, "\n"), file = stderr())
+  cat(paste("Data size:", num_genes, "genes (rows) ×", num_cells, "cells (columns)\n"), file = stderr())
   
   # Write without trailing newline
   cat(result$species, file = output_file, sep = "")
   cat(gene_format, file = format_output_file, sep = "")
+  
+  # Write data size output (rows columns)
+  data_size_output_file <- "data_size.txt"
+  cat(paste(num_genes, num_cells), file = data_size_output_file, sep = "")
   
   cat("Species inference completed successfully\n", file = stderr())
   

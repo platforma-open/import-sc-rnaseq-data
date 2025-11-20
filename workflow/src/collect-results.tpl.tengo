@@ -23,7 +23,6 @@ self.body(func(inputs) {
 		arg("-o").arg("sample_metrics.csv")
 
 	// Build map genes job
-	ll.print("DBG: species: %v", species)
 	geneAsset := geneMap.getGeneAsset(species)
 	geneAssetName := geneMap.getAssetName(species)
 

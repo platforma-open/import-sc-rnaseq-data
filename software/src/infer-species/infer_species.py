@@ -653,7 +653,7 @@ class CountMatrixAnalyzer:
         self.gene_identifiers = [str(gene_id) for gene_id in self.gene_identifiers if gene_id is not None]
 
 
-def infer_species_from_mtx(features_file: str) -> str:
+def infer_species_from_mtx(features_file: str) -> Tuple[str, int]:
     """
     Infer species from a 10X Genomics features file (TSV format).
     
@@ -661,7 +661,7 @@ def infer_species_from_mtx(features_file: str) -> str:
         features_file: Path to the features.tsv.gz file
         
     Returns:
-        Inferred species name
+        Tuple of (inferred species name, number of genes)
     """
     try:
         # Load the features file
@@ -680,6 +680,9 @@ def infer_species_from_mtx(features_file: str) -> str:
                 df = pl.read_csv(features_file, separator='\t', has_header=False)
             else:
                 df = pl.read_csv(features_file, has_header=False)
+        
+        # Get number of genes (rows) from features file
+        num_genes = df.height
         
         # Extract gene identifiers from first column (Ensembl IDs)
         gene_identifiers = df.select(pl.col(df.columns[0])).to_series().to_list()
@@ -722,7 +725,8 @@ def infer_species_from_mtx(features_file: str) -> str:
             'pig': 'sus-scrofa'
         }
         
-        return species_mapping.get(best_species, best_species)
+        species = species_mapping.get(best_species, best_species)
+        return (species, num_genes)
         
     except Exception as e:
         raise SpeciesInferenceError(f"Error inferring species from MTX features file: {e}")
@@ -883,6 +887,11 @@ def main():
         help='Output file name (default: species.txt)'
     )
     
+    parser.add_argument(
+        '--barcodes',
+        help='Path to barcodes.tsv file (required for mtx format to calculate cell count)'
+    )
+    
     args = parser.parse_args()
     
     try:
@@ -905,11 +914,40 @@ def main():
             
             gene_format = format_mapping.get(gene_analyzer.identifier_type, 'unknown')
             
+            # Calculate data size: rows = genes, columns = cells
+            n_rows, n_cols = analyzer.df.shape
+            if analyzer.gene_orientation == 'rows':
+                # Genes in rows, cells in columns (excluding first column which is gene names)
+                num_genes = n_rows
+                num_cells = n_cols - 1  # Subtract the gene identifier column
+            else:
+                # Genes in columns, cells in rows (excluding first column which is cell names)
+                num_genes = n_cols - 1  # Subtract the cell identifier column
+                num_cells = n_rows
+            
         elif args.format == 'mtx':
-            species = infer_species_from_mtx(args.input_file)
+            species, num_genes = infer_species_from_mtx(args.input_file)
             
             # For MTX format, we know it's Ensembl IDs from the features file
             gene_format = 'Ensembl Id'
+            
+            # Number of cells (columns) from barcodes file
+            if args.barcodes:
+                barcodes_path = Path(args.barcodes)
+                if barcodes_path.suffix.lower() == '.gz':
+                    if barcodes_path.stem.endswith('.tsv'):
+                        barcodes_df = pl.read_csv(args.barcodes, separator='\t', has_header=False)
+                    else:
+                        barcodes_df = pl.read_csv(args.barcodes, has_header=False)
+                else:
+                    if barcodes_path.suffix.lower() in ['.tsv', '.txt']:
+                        barcodes_df = pl.read_csv(args.barcodes, separator='\t', has_header=False)
+                    else:
+                        barcodes_df = pl.read_csv(args.barcodes, has_header=False)
+                num_cells = barcodes_df.height
+            else:
+                # Number of cells (columns) is unknown from features file alone
+                num_cells = 0
             
         elif args.format in ['h5ad', 'h5ad-multi-sample']:
             species = infer_species_from_h5ad(args.input_file)
@@ -927,6 +965,10 @@ def main():
                 'entrez': 'Entrez Id'
             }
             gene_format = format_mapping.get(gene_analyzer.identifier_type, 'unknown')
+            
+            # Calculate data size: adata.shape = (n_obs, n_vars) = (cells, genes)
+            # So rows = genes, columns = cells
+            num_cells, num_genes = adata.shape
         
         # Write species output
         output_path = Path(args.output)
@@ -938,10 +980,17 @@ def main():
         with open(format_output_path, 'w') as f:
             f.write(gene_format)
         
+        # Write data size output (rows columns)
+        data_size_output_path = Path('data_size.txt')
+        with open(data_size_output_path, 'w') as f:
+            f.write(f"{num_genes} {num_cells}")
+        
         print(f"Species inferred: {species}")
         print(f"Gene format detected: {gene_format}")
+        print(f"Data size: {num_genes} genes (rows) × {num_cells} cells (columns)")
         print(f"Species result written to: {output_path}")
         print(f"Gene format result written to: {format_output_path}")
+        print(f"Data size result written to: {data_size_output_path}")
         
     except SpeciesInferenceError as e:
         print(f"Error: {e}", file=sys.stderr)

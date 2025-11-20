@@ -12,6 +12,7 @@ pfSymbolsConv := import(":libs.pf-symbols-conv")
 exportCountsConv := import(":libs.export-counts")
 exportNormCountsConv := import(":libs.export-norm-counts")
 resultsSummaryConv := import(":libs.results-summary-conv")
+memoryCalc := import(":libs.memory-calc")
 
 importCountsTpl := assets.importTemplate(":import-counts")
 collectResultsTpl := assets.importTemplate(":collect-results")
@@ -24,6 +25,7 @@ self.awaitState("params", "ResourceReady")
 self.awaitState("inputSpec", "ResourceReady")
 self.awaitState("species", "ResourceReady")
 self.awaitState("geneFormat", "ResourceReady")
+self.awaitState("dataSize", "ResourceReady")
 self.awaitState("sampleColumnName", "ResourceReady")
 
 self.body(func(inputs) {
@@ -40,6 +42,15 @@ self.body(func(inputs) {
 	fileExtension := inputSpec.domain["pl7.app/fileExtension"]
 	sampleAxisSpec :=  inputSpec.axesSpec[0]
 	compression := inputSpec.domain["pl7.app/compression"]
+	
+	// Calculate memory based on data size if available, otherwise use provided or default
+	// at the moment we only calculate memory based by the first sample, assuming all samples
+	// are similar in size
+	dataSizeStr := undefined
+	if !is_undefined(inputs.dataSize) {
+		dataSizeStr = string(inputs.dataSize.getData())
+	}
+	calculatedMemGiB := memoryCalc.calculateMemory(dataSizeStr)
 
 	// In MTX format aggregate by role axis
 	aggregate := []
@@ -57,20 +68,20 @@ self.body(func(inputs) {
 		    aggregate: aggregate,
 		    passKey: true,
 		    traceSteps: [makeTraceStep(blockId)],
-		    extra: {
+			extra: {
 				species: species,
 				fileExtension: fileExtension,
 				geneFormat: geneFormat,
+				dataSize: inputs.dataSize,
 				importMode: importMode,
 				compression: compression,
 				samplesIdToLabelMap: samplesIdToLabelMap,
 				sampleColumnName: sampleColumnName
+			},
+			metaExtra: {
+				mem: calculatedMemGiB,
+				cpu: 2
 			}
-			// ,
-			// metaExtra: {
-			// 	mem: inputs.params.mem,
-			// 	cpu: inputs.params.cpu
-			// }
 		}
 	)
 

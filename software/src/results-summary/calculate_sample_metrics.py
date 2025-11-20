@@ -25,6 +25,8 @@ import numpy as np
 import argparse
 from pathlib import Path
 import sys
+import os
+from datetime import datetime
 from typing import Dict, Any, List
 
 SAMPLE_COLUMN_NAME = "SampleId"
@@ -176,6 +178,15 @@ def process_files(input_files: List[str], output_file: str) -> None:
 
 
 def main():
+    # Setup timing logging
+    script_name = os.path.splitext(os.path.basename(__file__))[0]
+    log_file = f"{script_name}.time.log"
+    start_time = datetime.now()
+    
+    with open(log_file, 'w') as f:
+        f.write(f"Script: {script_name}\n")
+        f.write(f"Start time: {start_time.strftime('%Y-%m-%d %H:%M:%S')}\n")
+    
     parser = argparse.ArgumentParser(
         description="Calculate basic metrics per sample from long-format count data",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -222,7 +233,22 @@ Output metrics include:
         process_files(args.inputs, args.output)
     except Exception as e:
         print(f"Error processing file: {e}")
+        # Log end time even on error
+        end_time = datetime.now()
+        duration = end_time - start_time
+        with open(log_file, 'a') as f:
+            f.write(f"End time: {end_time.strftime('%Y-%m-%d %H:%M:%S')}\n")
+            f.write(f"Total duration: {duration.total_seconds():.2f} seconds ({duration})\n")
+            f.write(f"Status: ERROR - {str(e)}\n")
         sys.exit(1)
+    
+    # Log end time and duration
+    end_time = datetime.now()
+    duration = end_time - start_time
+    
+    with open(log_file, 'a') as f:
+        f.write(f"End time: {end_time.strftime('%Y-%m-%d %H:%M:%S')}\n")
+        f.write(f"Total duration: {duration.total_seconds():.2f} seconds ({duration})\n")
 
 
 if __name__ == "__main__":

@@ -1,10 +1,11 @@
 #!/usr/bin/env Rscript
-# Extract counts from Seurat RDS file and convert to long-format CSV
+# Extract counts from Seurat RDS file and convert to long-format Parquet
 
 library(SeuratObject)
 library(Matrix)
 library(dplyr)
 library(data.table)
+library(arrow)
 
 # Parse command line arguments
 args <- commandArgs(trailingOnly = TRUE)
@@ -252,9 +253,17 @@ tryCatch({
   # Handle duplicate CellId-GeneId combinations
   dt_raw <- handle_duplicate_combinations(dt_raw, "Count")
   
-  # Write raw counts using data.table fwrite (much faster than write.csv)
-  cat(paste("Writing raw count matrix to", args_parsed$output, "\n"), file = stderr())
-  fwrite(dt_raw, file = args_parsed$output, row.names = FALSE, quote = FALSE)
+  # Ensure output path ends with .parquet
+  output_path <- args_parsed$output
+  if (!grepl("\\.parquet$", output_path)) {
+    # Remove .gz or .csv extension if present, then add .parquet
+    output_path <- sub("\\.(csv|gz)$", "", output_path)
+    output_path <- paste0(output_path, ".parquet")
+  }
+  
+  # Write raw counts using arrow to Parquet format
+  cat(paste("Writing raw count matrix to", output_path, "\n"), file = stderr())
+  write_parquet(dt_raw, output_path, compression = "zstd")
   
   # Normalize counts
   cat("Normalizing counts...\n", file = stderr())
@@ -267,10 +276,15 @@ tryCatch({
   # Handle duplicate CellId-GeneId combinations in normalized data
   dt_norm <- handle_duplicate_combinations(dt_norm, "NormalizedCount")
   
-  # Write normalized counts using data.table fwrite (much faster than write.csv)
-  normalized_output <- sub("\\.csv$", "_normalized.csv", args_parsed$output)
+  # Write normalized counts to Parquet format
+  # Generate normalized output path with .parquet extension
+  if (grepl("\\.parquet$", output_path)) {
+    normalized_output <- sub("\\.parquet$", "_normalized.parquet", output_path)
+  } else {
+    normalized_output <- paste0(output_path, "_normalized.parquet")
+  }
   cat(paste("Writing normalized count matrix to", normalized_output, "\n"), file = stderr())
-  fwrite(dt_norm, file = normalized_output, row.names = FALSE, quote = FALSE)
+  write_parquet(dt_norm, normalized_output, compression = "zstd")
   
   cat("Done!\n", file = stderr())
   
