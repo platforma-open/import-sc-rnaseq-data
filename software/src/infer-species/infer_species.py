@@ -732,25 +732,23 @@ def infer_species_from_mtx(features_file: str) -> Tuple[str, int]:
         raise SpeciesInferenceError(f"Error inferring species from MTX features file: {e}")
 
 
-def infer_species_from_h5ad(input_file: str) -> str:
+def _infer_species_from_anndata(adata) -> str:
     """
-    Infer species from an AnnData h5ad file.
+    Common function to infer species from an AnnData object.
     
     Args:
-        input_file: Path to the .h5ad file
+        adata: AnnData object
+        file_type: String describing the file type (for error messages)
         
     Returns:
         Inferred species name
     """
     try:
-        # Load the h5ad file
-        adata = sc.read_h5ad(input_file)
-        
         # Extract gene identifiers from var_names (genes)
         gene_identifiers = list(adata.var_names)
         
         if not gene_identifiers:
-            raise SpeciesInferenceError("No gene identifiers found in the h5ad file")
+            raise SpeciesInferenceError(f"No gene identifiers found")
         
         # Analyze gene identifiers to infer species
         gene_analyzer = GeneIdentifierAnalyzer()
@@ -790,7 +788,41 @@ def infer_species_from_h5ad(input_file: str) -> str:
         return species_mapping.get(best_species, best_species)
         
     except Exception as e:
-        raise SpeciesInferenceError(f"Error inferring species from h5ad file: {e}")
+        raise SpeciesInferenceError(f"Error inferring species: {e}")
+
+def infer_species_from_h5ad(input_file: str) -> str:
+    """
+    Infer species from an AnnData h5ad file.
+    
+    Args:
+        input_file: Path to the .h5ad file
+        
+    Returns:
+        Inferred species name
+    """
+    # Load the h5ad file
+    adata = sc.read_h5ad(input_file)
+    # Use common function to infer species
+    return _infer_species_from_anndata(adata, "h5ad")
+
+def infer_species_from_h5(input_file: str = None, adata=None) -> str:
+    """
+    Infer species from a 10x Genomics Cell Ranger HDF5 (h5) file.
+    
+    Args:
+        input_file: Path to the .h5 file (required if adata is not provided)
+        adata: AnnData object (optional, if provided, input_file is ignored)
+        
+    Returns:
+        Inferred species name
+    """
+    # Load the 10x h5 file if adata is not provided
+    if adata is None:
+        if input_file is None:
+            raise ValueError("Either input_file or adata must be provided")
+        adata = sc.read_10x_h5(input_file)
+    # Use common function to infer species
+    return _infer_species_from_anndata(adata, "h5")
 
 
 def infer_species(input_file: str) -> str:
@@ -866,19 +898,20 @@ def main():
     python infer_species.py features.tsv.gz --format mtx
     python infer_species.py data.h5ad --format h5ad
     python infer_species.py data.h5ad --format h5ad-multi-sample
+    python infer_species.py data.h5 --format h5
         """
     )
     
     parser.add_argument(
         'input_file',
-        help='Path to the input file (CSV/TSV for csv format, TSV for mtx format, h5ad for h5ad format)'
+        help='Path to the input file (CSV/TSV for csv format, TSV for mtx format, h5ad for h5ad format, h5 for h5 format)'
     )
     
     parser.add_argument(
         '--format', '-f',
-        choices=['csv', 'mtx', 'h5ad', 'h5ad-multi-sample'],
+        choices=['csv', 'mtx', 'h5ad', 'h5ad-multi-sample', 'h5'],
         default='csv',
-        help='Input format: csv for count matrix files, mtx for 10X Genomics features file, h5ad for AnnData files, h5ad-multi-sample for multi-sample AnnData files (default: csv)'
+        help='Input format: csv for count matrix files, mtx for 10X Genomics features file, h5ad for AnnData files, h5ad-multi-sample for multi-sample AnnData files, h5 for 10X Genomics Cell Ranger HDF5 files (default: csv)'
     )
     
     parser.add_argument(
@@ -949,11 +982,16 @@ def main():
                 # Number of cells (columns) is unknown from features file alone
                 num_cells = 0
             
-        elif args.format in ['h5ad', 'h5ad-multi-sample']:
-            species = infer_species_from_h5ad(args.input_file)
+        elif args.format in ['h5ad', 'h5ad-multi-sample', 'h5']:
+            if args.format == 'h5':
+                adata = sc.read_10x_h5(args.input_file)
+            else:
+                adata = sc.read_h5ad(args.input_file)
             
-            # Detect gene format from h5ad file
-            adata = sc.read_h5ad(args.input_file)
+            # Infer species using the already-loaded adata
+            species = _infer_species_from_anndata(adata)
+            
+            # Detect gene format from the same adata object
             gene_identifiers = list(adata.var_names)
             
             gene_analyzer = GeneIdentifierAnalyzer()
