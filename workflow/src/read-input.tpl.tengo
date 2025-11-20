@@ -27,11 +27,13 @@ self.body(func(inputs) {
 		}
 	}
 	
-	// Check for h5ad, seurat, or csv based on file extension
+	// Check for h5ad, h5, seurat, or csv based on file extension
 	if importMode == undefined && maps.containsKey(spec, "domain") && spec.domain != undefined {
 		fileExt := spec.domain["pl7.app/fileExtension"]
 		if fileExt == "h5ad" {
 			importMode = "h5ad"
+		} else if fileExt == "h5" {
+			importMode = "h5"
 		} else if fileExt == "rds" {
 			importMode = "seurat"
 		} else if fileExt == "csv" || fileExt == "csv.gz" || fileExt == "tsv" || fileExt == "tsv.gz" {
