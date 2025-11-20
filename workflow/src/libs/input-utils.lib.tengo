@@ -55,21 +55,26 @@ isMultiSample := func(spec) {
 	return false
 }
 
-createDatasetSpec := func(sampleIds, sampleIdAxis, fileExtension) {
+createDatasetSpec := func(originalSpec, sampleIds, sampleIdAxis, fileExtension) {
 	dsSpec := {
 		kind: "PColumn",
 		name: "pl7.app/sequencing/data",
-		domain: maps.clone({
+		domain: maps.clone(originalSpec.domain, {
 			"pl7.app/fileExtension": fileExtension,
 			"pl7.app/compression": ""
 		}, { removeUndefs: true }),
 		valueType: "File",
-		annotations: {
+		annotations: maps.clone(originalSpec.annotations, {
 			"pl7.app/label": "Sequencing Data",
 			"pl7.app/axisKeys/0": string(json.encode(sampleIds))
-		},
+		}),
 		axesSpec: [sampleIdAxis]
 	}
+
+	if maps.containsKey(originalSpec, "trace") {
+		dsSpec.trace = originalSpec.trace
+	}
+
 	return dsSpec
 }
 
@@ -98,7 +103,7 @@ processMultiSample := func(bundle, importMode, fileExtension) {
 		sampleColumnName = groupIdAxis.annotations["pl7.app/sampleColumnName"]
 	}
 	
-	dsSpec := createDatasetSpec(sampleIds, sampleIdAxis, fileExtension)
+	dsSpec := createDatasetSpec(dataset.spec, sampleIds, sampleIdAxis, fileExtension)
 
 	dataBuilder := pColumn.resourceMapBuilder(1)
 	for sampleId in sampleIds {
