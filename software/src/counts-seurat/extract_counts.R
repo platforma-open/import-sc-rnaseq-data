@@ -6,48 +6,18 @@ library(Matrix)
 library(dplyr)
 library(data.table)
 library(arrow)
+library(argparse)
 
 # Parse command line arguments
-args <- commandArgs(trailingOnly = TRUE)
+parser <- ArgumentParser(description = "Extract counts from Seurat RDS file and convert to long-format Parquet")
+parser$add_argument("--format", help = "Gene format (optional)", default = NULL)
+parser$add_argument("--rds", required = TRUE, help = "Path to input Seurat RDS file")
+parser$add_argument("--sample-name", help = "Sample name to filter (optional)", default = NULL)
+parser$add_argument("--sample-column-name", help = "Sample column name in metadata (required if --sample-name is provided)", default = NULL)
+parser$add_argument("--sample-id", help = "Sample ID to add to output (optional)", default = NULL)
+parser$add_argument("--output", required = TRUE, help = "Path to output Parquet file")
 
-# Function to parse arguments
-parse_args <- function(args) {
-  parsed <- list(
-    format = NULL,
-    rds = NULL,
-    sample_name = NULL,
-    sample_column_name = NULL,
-    sample_id = NULL,
-    output = NULL
-  )
-  
-  i <- 1
-  while (i <= length(args)) {
-    if (args[i] == "--format") {
-      parsed$format <- args[i + 1]
-      i <- i + 2
-    } else if (args[i] == "--rds") {
-      parsed$rds <- args[i + 1]
-      i <- i + 2
-    } else if (args[i] == "--sample-name") {
-      parsed$sample_name <- args[i + 1]
-      i <- i + 2
-    } else if (args[i] == "--sample-column-name") {
-      parsed$sample_column_name <- args[i + 1]
-      i <- i + 2
-    } else if (args[i] == "--sample-id") {
-      parsed$sample_id <- args[i + 1]
-      i <- i + 2
-    } else if (args[i] == "--output") {
-      parsed$output <- args[i + 1]
-      i <- i + 2
-    } else {
-      i <- i + 1
-    }
-  }
-  
-  return(parsed)
-}
+args <- parser$parse_args()
 
 # Clean barcode suffix (remove "-1", "-2", etc. for 10X Genomics format)
 clean_barcode_suffix <- function(barcode) {
@@ -179,21 +149,10 @@ handle_duplicate_combinations <- function(dt, count_column_name = "Count") {
   return(dt)
 }
 
-args_parsed <- parse_args(args)
-
-# Validate required arguments
-if (is.null(args_parsed$rds)) {
-  stop("Error: --rds is required")
-}
-
-if (is.null(args_parsed$output)) {
-  stop("Error: --output is required")
-}
-
 tryCatch({
   # Read the Seurat object
-  cat(paste("Reading Seurat RDS file:", args_parsed$rds, "\n"), file = stderr())
-  seurat_obj <- readRDS(args_parsed$rds)
+  cat(paste("Reading Seurat RDS file:", args$rds, "\n"), file = stderr())
+  seurat_obj <- readRDS(args$rds)
   
   # Check if it's a Seurat object
   if (!inherits(seurat_obj, "Seurat")) {
@@ -201,30 +160,30 @@ tryCatch({
   }
   
   # Filter by sample if sample_name is provided
-  if (!is.null(args_parsed$sample_name)) {
+  if (!is.null(args$sample_name)) {
     # Require sample_column_name when filtering by sample
-    if (is.null(args_parsed$sample_column_name)) {
+    if (is.null(args$sample_column_name)) {
       stop("Error: --sample-column-name is required when --sample-name is provided")
     }
     
-    cat(paste("Filtering for sample:", args_parsed$sample_name, "\n"), file = stderr())
-    cat(paste("Using sample column name:", args_parsed$sample_column_name, "\n"), file = stderr())
+    cat(paste("Filtering for sample:", args$sample_name, "\n"), file = stderr())
+    cat(paste("Using sample column name:", args$sample_column_name, "\n"), file = stderr())
     
     metadata <- seurat_obj@meta.data
     
     # Validate that the column exists
-    if (!(args_parsed$sample_column_name %in% colnames(metadata))) {
-      stop(paste("Provided sample column '", args_parsed$sample_column_name, "' not found in metadata. Available columns: ", paste(colnames(metadata), collapse = ", "), sep = ""))
+    if (!(args$sample_column_name %in% colnames(metadata))) {
+      stop(paste("Provided sample column '", args$sample_column_name, "' not found in metadata. Available columns: ", paste(colnames(metadata), collapse = ", "), sep = ""))
     }
     
     # Filter Seurat object for the target sample
-    seurat_obj <- seurat_obj[, seurat_obj@meta.data[[args_parsed$sample_column_name]] == args_parsed$sample_name]
+    seurat_obj <- seurat_obj[, seurat_obj@meta.data[[args$sample_column_name]] == args$sample_name]
     
     if (ncol(seurat_obj) == 0) {
-      stop(paste("No cells found for sample '", args_parsed$sample_name, "'.", sep = ""))
+      stop(paste("No cells found for sample '", args$sample_name, "'.", sep = ""))
     }
     
-    cat(paste("Filtered to", ncol(seurat_obj), "cells for sample '", args_parsed$sample_name, "'\n", sep = ""), file = stderr())
+    cat(paste("Filtered to", ncol(seurat_obj), "cells for sample '", args$sample_name, "'\n", sep = ""), file = stderr())
   }
   
   cat(paste("Seurat object shape:", ncol(seurat_obj), "cells ×", nrow(seurat_obj), "genes\n"), file = stderr())
@@ -246,7 +205,7 @@ tryCatch({
   # Convert to long format for raw counts (already returns data.table)
   cat(paste("Processing", ncol(counts), "cells ×", nrow(counts), "genes...\n"), file = stderr())
   dt_raw <- matrix_to_long_format(counts, cleaned_cell_names, gene_names, "Count")
-  dt_raw <- add_sample_id_column(dt_raw, args_parsed$sample_id, "Count")
+  dt_raw <- add_sample_id_column(dt_raw, args$sample_id, "Count")
   
   cat(paste("Total non-zero entries:", nrow(dt_raw), "\n"), file = stderr())
   
@@ -254,7 +213,7 @@ tryCatch({
   dt_raw <- handle_duplicate_combinations(dt_raw, "Count")
   
   # Ensure output path ends with .parquet
-  output_path <- args_parsed$output
+  output_path <- args$output
   if (!grepl("\\.parquet$", output_path)) {
     # Remove .gz or .csv extension if present, then add .parquet
     output_path <- sub("\\.(csv|gz)$", "", output_path)
@@ -271,7 +230,7 @@ tryCatch({
   
   # Convert normalized to long format (already returns data.table)
   dt_norm <- matrix_to_long_format(normalized, cleaned_cell_names, gene_names, "NormalizedCount")
-  dt_norm <- add_sample_id_column(dt_norm, args_parsed$sample_id, "NormalizedCount")
+  dt_norm <- add_sample_id_column(dt_norm, args$sample_id, "NormalizedCount")
   
   # Handle duplicate CellId-GeneId combinations in normalized data
   dt_norm <- handle_duplicate_combinations(dt_norm, "NormalizedCount")

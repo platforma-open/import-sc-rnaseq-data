@@ -2,35 +2,14 @@
 # Infer species from Seurat RDS file based on gene identifiers
 
 library(SeuratObject)
+library(argparse)
 
 # Parse command line arguments
-args <- commandArgs(trailingOnly = TRUE)
+parser <- ArgumentParser(description = "Infer species from Seurat RDS file based on gene identifiers")
+parser$add_argument("input_file", help = "Path to input Seurat RDS file")
+parser$add_argument("--format", "-f", help = "Gene format (optional)", default = NULL)
 
-# Function to parse arguments
-parse_args <- function(args) {
-  parsed <- list(
-    format = NULL,
-    input_file = NULL
-  )
-  
-  i <- 1
-  while (i <= length(args)) {
-    if (args[i] == "--format" || args[i] == "-f") {
-      parsed$format <- args[i + 1]
-      i <- i + 2
-    } else if (!startsWith(args[i], "--")) {
-      # First non-flag argument is the input file (positional)
-      if (is.null(parsed$input_file)) {
-        parsed$input_file <- args[i]
-      }
-      i <- i + 1
-    } else {
-      i <- i + 1
-    }
-  }
-  
-  return(parsed)
-}
+args <- parser$parse_args()
 
 # Detect gene identifier type
 detect_gene_format <- function(gene_names) {
@@ -112,21 +91,14 @@ detect_gene_format <- function(gene_names) {
   return(list(type = "symbol", species = "homo-sapiens"))
 }
 
-args_parsed <- parse_args(args)
-
-# Validate required arguments
-if (is.null(args_parsed$input_file)) {
-  stop("Error: input file is required as positional argument")
-}
-
 # Output filenames
 output_file <- "species.txt"
 format_output_file <- "gene_format.txt"
 
 tryCatch({
   # Read the Seurat object
-  cat(paste("Reading Seurat RDS file:", args_parsed$input_file, "\n"), file = stderr())
-  seurat_obj <- readRDS(args_parsed$input_file)
+  cat(paste("Reading Seurat RDS file:", args$input_file, "\n"), file = stderr())
+  seurat_obj <- readRDS(args$input_file)
   
   # Check if it's a Seurat object
   if (!inherits(seurat_obj, "Seurat")) {
