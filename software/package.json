@@ -145,17 +145,17 @@
           ]
         }
       },
-      "counts-seurat": {
+      "seurat-utils": {
         "binary": {
           "artifact": {
             "type": "R",
             "registry": "platforma-open",
             "environment": "@platforma-open/milaboratories.runenv-r-samples-and-data:main",
-            "root": "./src/counts-seurat"
+            "root": "./src/seurat-utils"
           },
           "cmd": [
             "Rscript",
-            "{pkg}/extract_counts.R"
+            "{pkg}/seurat_operations.R"
           ]
         },
         "docker": {
@@ -165,31 +165,7 @@
             "dockerfile": "./src/counts-seurat/Dockerfile"
           },
           "cmd": [
-            "/app/extract_counts.R"
-          ]
-        }
-      },
-      "infer-species-seurat": {
-        "binary": {
-          "artifact": {
-            "type": "R",
-            "registry": "platforma-open",
-            "environment": "@platforma-open/milaboratories.runenv-r-samples-and-data:main",
-            "root": "./src/infer-species-seurat"
-          },
-          "cmd": [
-            "Rscript",
-            "{pkg}/infer_species.R"
-          ]
-        },
-        "docker": {
-          "artifact": {
-            "type": "docker",
-            "context": "./src/infer-species-seurat",
-            "dockerfile": "./src/infer-species-seurat/Dockerfile"
-          },
-          "cmd": [
-            "/app/infer_species.R"
+            "/app/seurat_operations.R"
           ]
         }
       }

@@ -64,7 +64,8 @@ self.body(func(inputs) {
 	// Select software based on format
 	if fileFormat == "seurat" {
 		countMatrixCsv = countMatrixCsv.
-			software(assets.importSoftware("@platforma-open/milaboratories.import-sc-rnaseq-data.software:counts-seurat"))
+			software(assets.importSoftware("@platforma-open/milaboratories.import-sc-rnaseq-data.software:seurat-utils")).
+			arg("extract-counts")
 	} else {
 		countMatrixCsv = countMatrixCsv.
 			software(assets.importSoftware("@platforma-open/milaboratories.import-sc-rnaseq-data.software:counts-csv"))
