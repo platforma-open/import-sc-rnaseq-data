@@ -10,14 +10,66 @@ library(argparse)
 
 # Parse command line arguments
 parser <- ArgumentParser(description = "Extract counts from Seurat RDS file and convert to long-format Parquet")
-parser$add_argument("--format", help = "Gene format (optional)", default = NULL)
+parser$add_argument("--format", help = "Input format (seurat)", default = NULL)
 parser$add_argument("--rds", required = TRUE, help = "Path to input Seurat RDS file")
 parser$add_argument("--sample-name", help = "Sample name to filter (optional)", default = NULL)
 parser$add_argument("--sample-column-name", help = "Sample column name in metadata (required if --sample-name is provided)", default = NULL)
 parser$add_argument("--sample-id", help = "Sample ID to add to output (optional)", default = NULL)
+parser$add_argument("--gene-format", choices = c("gene symbol", "Ensembl Id"), help = "Gene identifier format: 'gene symbol' or 'Ensembl Id'", default = NULL)
+parser$add_argument("--annotation", help = "Path to gene annotation CSV file (required when --gene-format is 'gene symbol')", default = NULL)
 parser$add_argument("--output", required = TRUE, help = "Path to output Parquet file")
 
 args <- parser$parse_args()
+
+# Load gene annotation file and create symbol to Ensembl ID mapping
+load_gene_annotation <- function(annotation_path) {
+  cat(paste("Loading gene annotation file:", annotation_path, "\n"), file = stderr())
+  
+  # Read the annotation file (check.names = FALSE to preserve column names with spaces)
+  annotation_df <- read.csv(annotation_path, stringsAsFactors = FALSE, check.names = FALSE)
+  
+  # Create mapping from gene symbol to Ensembl ID
+  # Column names are "Gene symbol" and "Ensembl Id" (with spaces)
+  symbol_to_ensembl <- setNames(annotation_df[["Ensembl Id"]], annotation_df[["Gene symbol"]])
+  
+  # Remove NA values
+  symbol_to_ensembl <- symbol_to_ensembl[!is.na(symbol_to_ensembl) & !is.na(names(symbol_to_ensembl))]
+  
+  cat(paste("Loaded", length(symbol_to_ensembl), "gene symbol to Ensembl ID mappings\n"), file = stderr())
+  return(symbol_to_ensembl)
+}
+
+# Convert gene symbols to Ensembl IDs
+convert_gene_symbols_to_ensembl <- function(gene_names, symbol_to_ensembl) {
+  cat("Converting gene symbols to Ensembl IDs...\n", file = stderr())
+  
+  # Create mapping for gene names
+  gene_mapping <- gene_names
+  converted_count <- 0
+  not_found_genes <- c()
+  
+  for (i in seq_along(gene_names)) {
+    gene <- gene_names[i]
+    if (gene %in% names(symbol_to_ensembl)) {
+      gene_mapping[i] <- symbol_to_ensembl[[gene]]
+      converted_count <- converted_count + 1
+    } else {
+      not_found_genes <- c(not_found_genes, gene)
+    }
+  }
+  
+  cat(paste("Converted", converted_count, "gene symbols to Ensembl IDs\n"), file = stderr())
+  if (length(not_found_genes) > 0) {
+    cat(paste("Warning:", length(not_found_genes), "genes not found in annotation file (keeping original names)\n"), file = stderr())
+    if (length(not_found_genes) <= 10) {
+      cat(paste("Not found genes:", paste(not_found_genes, collapse = ", "), "\n"), file = stderr())
+    } else {
+      cat(paste("Not found genes (first 10):", paste(not_found_genes[1:10], collapse = ", "), "...\n"), file = stderr())
+    }
+  }
+  
+  return(gene_mapping)
+}
 
 # Clean barcode suffix (remove "-1", "-2", etc. for 10X Genomics format)
 clean_barcode_suffix <- function(barcode) {
@@ -194,6 +246,17 @@ tryCatch({
   # Get gene and cell identifiers
   gene_names <- rownames(counts)
   cell_names <- colnames(counts)
+  
+  # Convert gene symbols to Ensembl IDs if requested
+  if (!is.null(args$gene_format) && args$gene_format == "gene symbol") {
+    if (is.null(args$annotation)) {
+      stop("Error: --annotation is required when --gene-format is 'gene symbol'")
+    }
+    symbol_to_ensembl <- load_gene_annotation(args$annotation)
+    gene_names <- convert_gene_symbols_to_ensembl(gene_names, symbol_to_ensembl)
+  } else if (!is.null(args$gene_format) && args$gene_format == "gene symbol" && is.null(args$annotation)) {
+    cat("Warning: Gene format is 'gene symbol' but no annotation file provided. Using original gene names.\n", file = stderr())
+  }
   
   # Clean cell barcodes if needed
   cleaned_cell_names <- sapply(cell_names, clean_barcode_suffix)

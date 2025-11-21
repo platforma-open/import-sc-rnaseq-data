@@ -450,7 +450,7 @@ def find_sample_column(obs_df, target_sample):
             
     return None
 
-def process_h5ad_file(h5ad_path, output_csv_path, sample_name=None, sample_id=None, sample_column_name=None):
+def process_h5ad_file(h5ad_path, output_csv_path, sample_name=None, sample_id=None, sample_column_name=None, gene_format=None, annotation_path=None):
     """Process an AnnData h5ad file and convert to long format CSV.
     
     Args:
@@ -459,6 +459,8 @@ def process_h5ad_file(h5ad_path, output_csv_path, sample_name=None, sample_id=No
         sample_name: Optional sample name to filter cells by
         sample_id: Optional sample ID to add as first column
         sample_column_name: Optional column name to use for sample filtering
+        gene_format: Optional gene identifier format ('gene symbol' or 'Ensembl Id')
+        annotation_path: Optional path to gene annotation CSV file (required when gene_format is 'gene symbol')
     """
     print(f"Loading h5ad file: {h5ad_path}")
     
@@ -495,6 +497,21 @@ def process_h5ad_file(h5ad_path, output_csv_path, sample_name=None, sample_id=No
     # Extract gene and cell identifiers
     gene_names = [clean_gene_name(gene) for gene in adata.var_names]
     cell_names = list(adata.obs_names)
+    
+    # Convert gene symbols to Ensembl IDs if requested
+    if gene_format == 'gene symbol' and annotation_path:
+        symbol_to_ensembl = load_gene_annotation(annotation_path)
+        # Create a mapping for gene names
+        gene_mapping = {}
+        for gene in gene_names:
+            if gene in symbol_to_ensembl:
+                gene_mapping[gene] = symbol_to_ensembl[gene]
+            else:
+                gene_mapping[gene] = gene  # Keep original if not found
+        # Update gene names with Ensembl IDs
+        gene_names = [gene_mapping[gene] for gene in gene_names]
+    elif gene_format == 'gene symbol' and not annotation_path:
+        print("Warning: Gene format is 'gene symbol' but no annotation file provided. Using original gene names.")
     
     # Clean cell barcodes if needed
     cleaned_cell_names = [clean_barcode_suffix(cell) for cell in cell_names]
@@ -612,7 +629,7 @@ def main():
     parser.add_argument('--xsv', help="Path to the XSV file (required for xsv format)")
     parser.add_argument('--h5ad', help="Path to the h5ad file (required for h5ad format)")
     parser.add_argument('--gene-format', choices=['gene symbol', 'Ensembl Id'], 
-                       help="Gene identifier format: 'gene symbol' or 'Ensembl Id' (for xsv format only)")
+                       help="Gene identifier format: 'gene symbol' or 'Ensembl Id'")
     parser.add_argument('--annotation', help="Path to gene annotation CSV file (required when --gene-format is 'gene symbol')")
     parser.add_argument('--sample-name', help="Sample name to filter cells by (optional, for h5ad format only)")
     parser.add_argument('--sample-column-name', help="Column name in h5ad .obs that contains sample identifiers (optional, for h5ad format only)")
@@ -635,7 +652,9 @@ def main():
         elif args.format == 'h5ad':
             if not args.h5ad:
                 parser.error("For h5ad format, --h5ad is required")
-            process_h5ad_file(args.h5ad, args.output, args.sample_name, args.sample_id, args.sample_column_name)
+            if args.gene_format == 'gene symbol' and not args.annotation:
+                parser.error("For gene format 'gene symbol', --annotation is required")
+            process_h5ad_file(args.h5ad, args.output, args.sample_name, args.sample_id, args.sample_column_name, args.gene_format, args.annotation)
     except Exception as e:
         # Log end time even on error
         end_time = datetime.now()
