@@ -217,22 +217,24 @@ def load_gene_annotation(annotation_path):
     print(f"Loaded {len(symbol_to_ensembl)} gene symbol to Ensembl ID mappings")
     return symbol_to_ensembl
 
-def convert_gene_symbols_to_ensembl(df, symbol_to_ensembl, gene_names):
-    """Convert gene symbols to Ensembl IDs in the dataframe."""
+def map_gene_symbols_to_ensembl(gene_names, symbol_to_ensembl):
+    """Map gene symbols to Ensembl IDs.
+    
+    Args:
+        gene_names: List of gene names (symbols or IDs)
+        symbol_to_ensembl: Dictionary mapping gene symbols to Ensembl IDs
+    
+    Returns:
+        List of converted gene names (Ensembl IDs where available, original names otherwise)
+    """
     print("Converting gene symbols to Ensembl IDs...")
     
-    # Create mapping for gene names
-    gene_mapping = {}
-    converted_count = 0
-    not_found_genes = []
+    # Use vectorized operations for efficiency
+    converted_gene_names = [symbol_to_ensembl.get(gene, gene) for gene in gene_names]
     
-    for gene in gene_names:
-        if gene in symbol_to_ensembl:
-            gene_mapping[gene] = symbol_to_ensembl[gene]
-            converted_count += 1
-        else:
-            gene_mapping[gene] = gene  # Keep original if not found
-            not_found_genes.append(gene)
+    # Count conversions and find not found genes
+    converted_count = sum(1 for gene in gene_names if gene in symbol_to_ensembl)
+    not_found_genes = [gene for gene in gene_names if gene not in symbol_to_ensembl]
     
     print(f"Converted {converted_count} gene symbols to Ensembl IDs")
     if not_found_genes:
@@ -242,10 +244,17 @@ def convert_gene_symbols_to_ensembl(df, symbol_to_ensembl, gene_names):
         else:
             print(f"Not found genes (first 10): {', '.join(not_found_genes[:10])}...")
     
-    # Update the dataframe index with Ensembl IDs
-    df.index = [gene_mapping[gene] for gene in df.index]
+    return converted_gene_names
+
+def convert_gene_symbols_to_ensembl(df, symbol_to_ensembl, gene_names):
+    """Convert gene symbols to Ensembl IDs in the dataframe."""
+    # Use the shared mapping function
+    converted_gene_names = map_gene_symbols_to_ensembl(gene_names, symbol_to_ensembl)
     
-    return df, list(df.index)
+    # Update the dataframe index with Ensembl IDs
+    df.index = converted_gene_names
+    
+    return df, converted_gene_names
 
 def handle_duplicate_combinations(df_long):
     """Handle duplicate CellId-GeneId combinations by keeping the entry with maximum count."""
@@ -501,15 +510,7 @@ def process_h5ad_file(h5ad_path, output_csv_path, sample_name=None, sample_id=No
     # Convert gene symbols to Ensembl IDs if requested
     if gene_format == 'gene symbol' and annotation_path:
         symbol_to_ensembl = load_gene_annotation(annotation_path)
-        # Create a mapping for gene names
-        gene_mapping = {}
-        for gene in gene_names:
-            if gene in symbol_to_ensembl:
-                gene_mapping[gene] = symbol_to_ensembl[gene]
-            else:
-                gene_mapping[gene] = gene  # Keep original if not found
-        # Update gene names with Ensembl IDs
-        gene_names = [gene_mapping[gene] for gene in gene_names]
+        gene_names = map_gene_symbols_to_ensembl(gene_names, symbol_to_ensembl)
     elif gene_format == 'gene symbol' and not annotation_path:
         print("Warning: Gene format is 'gene symbol' but no annotation file provided. Using original gene names.")
     
@@ -630,7 +631,7 @@ def main():
     parser.add_argument('--h5ad', help="Path to the h5ad file (required for h5ad format)")
     parser.add_argument('--gene-format', choices=['gene symbol', 'Ensembl Id'], 
                        help="Gene identifier format: 'gene symbol' or 'Ensembl Id'")
-    parser.add_argument('--annotation', help="Path to gene annotation CSV file (required when --gene-format is 'gene symbol')")
+    parser.add_argument('--annotation', help="Path to gene annotation CSV file")
     parser.add_argument('--sample-name', help="Sample name to filter cells by (optional, for h5ad format only)")
     parser.add_argument('--sample-column-name', help="Column name in h5ad .obs that contains sample identifiers (optional, for h5ad format only)")
     parser.add_argument('--sample-id', help="Sample ID to add as first column in output CSV")
@@ -646,14 +647,10 @@ def main():
         elif args.format == 'xsv':
             if not args.xsv:
                 parser.error("For xsv format, --xsv is required")
-            if args.gene_format == 'gene symbol' and not args.annotation:
-                parser.error("For gene format 'gene symbol', --annotation is required")
             process_csv_file(args.xsv, args.output, args.gene_format, args.annotation, args.sample_id)
         elif args.format == 'h5ad':
             if not args.h5ad:
                 parser.error("For h5ad format, --h5ad is required")
-            if args.gene_format == 'gene symbol' and not args.annotation:
-                parser.error("For gene format 'gene symbol', --annotation is required")
             process_h5ad_file(args.h5ad, args.output, args.sample_name, args.sample_id, args.sample_column_name, args.gene_format, args.annotation)
     except Exception as e:
         # Log end time even on error

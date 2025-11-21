@@ -43,20 +43,14 @@ load_gene_annotation <- function(annotation_path) {
 convert_gene_symbols_to_ensembl <- function(gene_names, symbol_to_ensembl) {
   cat("Converting gene symbols to Ensembl IDs...\n", file = stderr())
   
-  # Create mapping for gene names
-  gene_mapping <- gene_names
-  converted_count <- 0
-  not_found_genes <- c()
+  # Use vectorized operations for efficiency
+  found_mask <- gene_names %in% names(symbol_to_ensembl)
+  not_found_genes <- gene_names[!found_mask]
   
-  for (i in seq_along(gene_names)) {
-    gene <- gene_names[i]
-    if (gene %in% names(symbol_to_ensembl)) {
-      gene_mapping[i] <- symbol_to_ensembl[[gene]]
-      converted_count <- converted_count + 1
-    } else {
-      not_found_genes <- c(not_found_genes, gene)
-    }
-  }
+  gene_mapping <- gene_names
+  gene_mapping[found_mask] <- symbol_to_ensembl[gene_names[found_mask]]
+  
+  converted_count <- sum(found_mask)
   
   cat(paste("Converted", converted_count, "gene symbols to Ensembl IDs\n"), file = stderr())
   if (length(not_found_genes) > 0) {
@@ -249,13 +243,12 @@ tryCatch({
   
   # Convert gene symbols to Ensembl IDs if requested
   if (!is.null(args$gene_format) && args$gene_format == "gene symbol") {
-    if (is.null(args$annotation)) {
-      stop("Error: --annotation is required when --gene-format is 'gene symbol'")
+    if (!is.null(args$annotation)) {
+      symbol_to_ensembl <- load_gene_annotation(args$annotation)
+      gene_names <- convert_gene_symbols_to_ensembl(gene_names, symbol_to_ensembl)
+    } else {
+      cat(paste("Warning: Gene format is 'gene symbol' but no annotation file provided. Using original gene names.\n"), file = stderr())
     }
-    symbol_to_ensembl <- load_gene_annotation(args$annotation)
-    gene_names <- convert_gene_symbols_to_ensembl(gene_names, symbol_to_ensembl)
-  } else if (!is.null(args$gene_format) && args$gene_format == "gene symbol" && is.null(args$annotation)) {
-    cat("Warning: Gene format is 'gene symbol' but no annotation file provided. Using original gene names.\n", file = stderr())
   }
   
   # Clean cell barcodes if needed
