@@ -5,7 +5,6 @@
   "description": "Block Workflow",
   "scripts": {
     "build": "rm -rf dist && pl-tengo check && pl-tengo build",
-    "test": "vitest",
     "format": "/usr/bin/env emacs --script ./format.el"
   },
   "dependencies": {
@@ -14,8 +13,6 @@
   "devDependencies": {
     "@platforma-sdk/tengo-builder": "catalog:",
     "@platforma-open/milaboratories.import-sc-rnaseq-data.software": "workspace:*",
-    "@platforma-open/milaboratories.gene-annotations-assets": "catalog:",
-    "@platforma-sdk/test": "catalog:",
-    "vitest": "catalog:"
+    "@platforma-open/milaboratories.gene-annotations-assets": "catalog:"
   }
 }

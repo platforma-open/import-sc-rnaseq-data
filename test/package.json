@@ -5,16 +5,22 @@
   "description": "Block tests",
   "type": "module",
   "scripts": {
-    "test": "vitest --passWithNoTests"
+    "test": "vitest",
+    "lint": "eslint ."
   },
   "files": [],
   "keywords": [],
   "dependencies": {
-    "this-block": "workspace:@platforma-open/milaboratories.import-sc-rnaseq-data@*"
+    "this-block": "workspace:@platforma-open/milaboratories.import-sc-rnaseq-data@*",
+    "@platforma-open/milaboratories.import-sc-rnaseq-data.model": "workspace:*",
+    "@platforma-open/milaboratories.samples-and-data.model": "catalog:",
+    "@platforma-open/milaboratories.samples-and-data": "catalog:",
+    "@platforma-sdk/model": "catalog:"
   },
   "devDependencies": {
     "@platforma-sdk/test": "catalog:",
     "typescript": "catalog:",
-    "vitest": "catalog:"
+    "vitest": "catalog:",
+    "@platforma-sdk/eslint-config": "catalog:"
   }
 }
