@@ -57,7 +57,7 @@ self.body(func(inputs) {
 	context := processor.buildContext(inputs, inputMap, geneMap)
 	
 	// Use provided memory if available, otherwise use calculated memory
-	mem := !is_undefined(inputs.mem) ? string(inputs.mem) + "GiB" : string(inputs.mem) + "GiB"
+	mem := !is_undefined(inputs.mem) ? string(inputs.mem) + "GiB" : "8GiB"
 	cpu := !is_undefined(inputs.cpu) ? inputs.cpu : 1
 
 	countMatrixCsv := exec.builder()
