@@ -90,7 +90,8 @@ self.body(func(inputs) {
 		format = "seurat"
 		useSeuratSoftware = true
 		inferSpeciesJob = inferSpeciesJob.
-			software(assets.importSoftware("@platforma-open/milaboratories.import-sc-rnaseq-data.software:infer-species-seurat"))
+			software(assets.importSoftware("@platforma-open/milaboratories.import-sc-rnaseq-data.software:seurat-utils")).
+			arg("infer-species")
 	} else {
 		inferSpeciesJob = inferSpeciesJob.
 			software(assets.importSoftware("@platforma-open/milaboratories.import-sc-rnaseq-data.software:infer-species"))
