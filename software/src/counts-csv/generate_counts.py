@@ -20,20 +20,20 @@ def write_parquet(df, output_path):
     """
     start_time = datetime.now()
     total_rows = len(df)
-    
+
     # Ensure output path ends with .parquet
     if not output_path.endswith('.parquet'):
         output_path = output_path + '.parquet'
-    
+
     # Convert pandas DataFrame to Polars DataFrame
     conversion_start = datetime.now()
     pl_df = pl.from_pandas(df)
     conversion_time = (datetime.now() - conversion_start).total_seconds()
     print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Converted to Polars DataFrame in {conversion_time:.1f}s")
-    
+
     # Write to Parquet format
     pl_df.write_parquet(output_path, compression='zstd')
-    
+
     end_time = datetime.now()
     elapsed_time = (end_time - start_time).total_seconds()
     print(f"[{end_time.strftime('%Y-%m-%d %H:%M:%S')}] Completed writing {total_rows:,} rows to {output_path} - Total time: {elapsed_time:.1f}s")
@@ -450,46 +450,14 @@ def find_sample_column(obs_df, target_sample):
             
     return None
 
-def process_h5ad_file(h5ad_path, output_csv_path, sample_name=None, sample_id=None, sample_column_name=None):
-    """Process an AnnData h5ad file and convert to long format CSV.
+def _process_anndata_to_counts(adata, output_csv_path, sample_id=None):
+    """Common function to process AnnData object and convert to long format CSV.
     
     Args:
-        h5ad_path: Path to the h5ad file
+        adata: AnnData object
         output_csv_path: Path to save the output CSV
-        sample_name: Optional sample name to filter cells by
         sample_id: Optional sample ID to add as first column
-        sample_column_name: Optional column name to use for sample filtering
     """
-    print(f"Loading h5ad file: {h5ad_path}")
-    
-    # Load the h5ad file
-    adata = sc.read_h5ad(h5ad_path)
-    
-    # Filter by sample if sample_name is provided
-    if sample_name:
-        print(f"Filtering for sample: {sample_name}")
-        
-        if sample_column_name:
-            # Use provided column name
-            print(f"Using provided sample column name: '{sample_column_name}'")
-            if sample_column_name not in adata.obs.columns:
-                raise ValueError(f"Provided sample column '{sample_column_name}' not found in the h5ad file's .obs dataframe. Available columns: {list(adata.obs.columns)}")
-            sample_column = sample_column_name
-        else:
-            # Auto-detect column name
-            sample_column = find_sample_column(adata.obs, sample_name)
-            
-            if sample_column is None:
-                raise ValueError(f"Could not automatically identify the sample column containing '{sample_name}' in the h5ad file's .obs dataframe.")
-        
-        # Filter AnnData for the target sample
-        adata = adata[adata.obs[sample_column] == sample_name].copy()
-        
-        if adata.n_obs == 0:
-            raise ValueError(f"No cells found for sample '{sample_name}'.")
-        
-        print(f"Filtered to {adata.n_obs} cells for sample '{sample_name}'")
-    
     print(f"AnnData shape: {adata.shape} (cells × genes)")
     
     # Extract gene and cell identifiers
@@ -574,7 +542,7 @@ def process_h5ad_file(h5ad_path, output_csv_path, sample_name=None, sample_id=No
         norm_df = norm_df[["SampleId", "CellId", "GeneId", "NormalizedCount"]]
     else:
         norm_df = norm_df[["CellId", "GeneId", "NormalizedCount"]]
-    
+
     # Check for and handle duplicate CellId-GeneId combinations in normalized data
     norm_df = handle_duplicate_combinations_normalized(norm_df)
     
@@ -593,6 +561,65 @@ def process_h5ad_file(h5ad_path, output_csv_path, sample_name=None, sample_id=No
     
     print("Done!")
 
+def process_h5ad_file(h5ad_path, output_csv_path, sample_name=None, sample_id=None, sample_column_name=None):
+    """Process an AnnData h5ad file and convert to long format CSV.
+    
+    Args:
+        h5ad_path: Path to the h5ad file
+        output_csv_path: Path to save the output CSV
+        sample_name: Optional sample name to filter cells by
+        sample_id: Optional sample ID to add as first column
+        sample_column_name: Optional column name to use for sample filtering
+    """
+    print(f"Loading h5ad file: {h5ad_path}")
+    
+    # Load the h5ad file
+    adata = sc.read_h5ad(h5ad_path)
+    
+    # Filter by sample if sample_name is provided
+    if sample_name:
+        print(f"Filtering for sample: {sample_name}")
+        
+        if sample_column_name:
+            # Use provided column name
+            print(f"Using provided sample column name: '{sample_column_name}'")
+            if sample_column_name not in adata.obs.columns:
+                raise ValueError(f"Provided sample column '{sample_column_name}' not found in the h5ad file's .obs dataframe. Available columns: {list(adata.obs.columns)}")
+            sample_column = sample_column_name
+        else:
+            # Auto-detect column name
+            sample_column = find_sample_column(adata.obs, sample_name)
+            
+            if sample_column is None:
+                raise ValueError(f"Could not automatically identify the sample column containing '{sample_name}' in the h5ad file's .obs dataframe.")
+        
+        # Filter AnnData for the target sample
+        adata = adata[adata.obs[sample_column] == sample_name].copy()
+        
+        if adata.n_obs == 0:
+            raise ValueError(f"No cells found for sample '{sample_name}'.")
+        
+        print(f"Filtered to {adata.n_obs} cells for sample '{sample_name}'")
+    
+    # Process the AnnData object
+    _process_anndata_to_counts(adata, output_csv_path, sample_id)
+
+def process_h5_file(h5_path, output_csv_path, sample_id=None):
+    """Process a 10x Genomics Cell Ranger HDF5 (h5) file and convert to long format CSV.
+    
+    Args:
+        h5_path: Path to the 10x Genomics h5 file
+        output_csv_path: Path to save the output CSV
+        sample_id: Optional sample ID to add as first column
+    """
+    print(f"Loading 10x Genomics h5 file: {h5_path}")
+    
+    # Load the 10x h5 file using scanpy
+    adata = sc.read_10x_h5(h5_path)
+    
+    # Process the AnnData object
+    _process_anndata_to_counts(adata, output_csv_path, sample_id)
+
 def main():
     # Setup timing logging
     script_name = os.path.splitext(os.path.basename(__file__))[0]
@@ -604,13 +631,14 @@ def main():
         f.write(f"Start time: {start_time.strftime('%Y-%m-%d %H:%M:%S')}\n")
     
     parser = argparse.ArgumentParser(description="Convert .mtx.gz, .tsv.gz files or CSV files into a count matrix Parquet file.")
-    parser.add_argument('--format', required=True, choices=['mtx', 'xsv', 'h5ad'], 
-                       help="Input format: 'mtx' for 10X Genomics format, 'xsv' for CSV/TSV format, 'h5ad' for AnnData format")
+    parser.add_argument('--format', required=True, choices=['mtx', 'xsv', 'h5ad', 'h5'], 
+                       help="Input format: 'mtx' for 10X Genomics MTX format, 'xsv' for CSV/TSV format, 'h5ad' for AnnData format, 'h5' for 10X Genomics Cell Ranger HDF5 format")
     parser.add_argument('--matrix', help="Path to the matrix.mtx.gz file (required for mtx format)")
     parser.add_argument('--barcodes', help="Path to the barcodes.tsv.gz file (required for mtx format)")
     parser.add_argument('--features', help="Path to the features.tsv.gz file (required for mtx format)")
     parser.add_argument('--xsv', help="Path to the XSV file (required for xsv format)")
     parser.add_argument('--h5ad', help="Path to the h5ad file (required for h5ad format)")
+    parser.add_argument('--h5', help="Path to the h5 file (required for h5 format)")
     parser.add_argument('--gene-format', choices=['gene symbol', 'Ensembl Id'], 
                        help="Gene identifier format: 'gene symbol' or 'Ensembl Id' (for xsv format only)")
     parser.add_argument('--annotation', help="Path to gene annotation CSV file (required when --gene-format is 'gene symbol')")
@@ -636,6 +664,10 @@ def main():
             if not args.h5ad:
                 parser.error("For h5ad format, --h5ad is required")
             process_h5ad_file(args.h5ad, args.output, args.sample_name, args.sample_id, args.sample_column_name)
+        elif args.format == 'h5':
+            if not args.h5:
+                parser.error("For h5 format, --h5 is required")
+            process_h5_file(args.h5, args.output, args.sample_id)
     except Exception as e:
         # Log end time even on error
         end_time = datetime.now()

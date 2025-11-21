@@ -11,12 +11,14 @@ geneMap := import(":libs.gene-map")
 // Import format-specific processors
 formatXsv := import(":libs.processors.format-xsv")
 formatH5ad := import(":libs.processors.format-h5ad")
+formatH5 := import(":libs.processors.format-h5")
 formatMtx := import(":libs.processors.format-mtx")
 formatSeurat := import(":libs.processors.format-seurat")
 
 formatProcessors := {
 	"xsv": formatXsv,
 	"h5ad": formatH5ad,
+	"h5": formatH5,
 	"mtx": formatMtx,
 	"seurat": formatSeurat
 }
@@ -39,6 +41,8 @@ self.body(func(inputs) {
 		fileFormat = "mtx"
 	} else if (importMode == "h5ad" || importMode == "h5ad-multi-sample") {
 		fileFormat = "h5ad"
+	} else if importMode == "h5" {
+		fileFormat = "h5"
 	} else if (importMode == "seurat" || importMode == "seurat-multi-sample") {
 		fileFormat = "seurat"
 	} else {
