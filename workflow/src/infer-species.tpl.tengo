@@ -6,7 +6,7 @@ maps := import("@platforma-sdk/workflow-tengo:maps")
 ll := import("@platforma-sdk/workflow-tengo:ll")
 json := import("json")
 
-self.defineOutputs("species", "geneFormat")
+self.defineOutputs("species", "geneFormat", "dataSize")
 
 self.body(func(inputs) {
 	inputData := inputs.input
@@ -36,59 +36,90 @@ self.body(func(inputs) {
 
 	// Get the file to analyze based on format
 	fileToAnalyze := undefined
+	barcodesFile := undefined
 	
 	if hasRoleAxis {
-		// MTX format: need to get features file
-		// Keys are [sample, role] format, find file with "features.tsv" role
+		// MTX format: need to get features file and barcodes file
+		// Keys are [sample, role] format, find files with "features.tsv" and "barcodes.tsv" roles
 		for sKey in maps.getKeys(dataMap) {
 			key := json.decode(sKey)
-			// Check if key has role dimension (second element) is "features.tsv"
-			if len(key) == 2 && key[1] == "features.tsv" {
-				fileToAnalyze = dataMap[sKey]
-				break
+			// Check if key has role dimension (second element)
+			if len(key) == 2 {
+				if key[1] == "features.tsv" {
+					fileToAnalyze = dataMap[sKey]
+				} else if key[1] == "barcodes.tsv" {
+					barcodesFile = dataMap[sKey]
+				}
 			}
 		}
 		
 		if is_undefined(fileToAnalyze) {
 			ll.panic("Could not find features file in MTX input data")
 		}
+		if is_undefined(barcodesFile) {
+			ll.panic("Could not find barcodes file in MTX input data")
+		}
 	} else {
-		// CSV/H5AD format: get first sample
+		// CSV/H5AD/Seurat format: get first sample
 		firstKey := maps.getKeys(dataMap)[0]
 		fileToAnalyze = dataMap[firstKey]
 	}
 
 	// Determine file name and format based on import mode
 	fileName := ""
+	barcodesFileName := ""
 	format := importMode
 	
 	if hasRoleAxis {
-		// MTX format: use features file (may have .gz extension)
+		// MTX format: use features file and barcodes file (may have .gz extension)
 		// Get the actual file extension from the domain
-		fileName = "features.tsv"
 		compression := inputSpec.domain["pl7.app/compression"]
-		if compression == "gz" {
-			fileName = fileName + ".gz"
-		}
+		ext := compression == "gz" ? ".gz" : ""
+		fileName = "features.tsv" + ext
+		barcodesFileName = "barcodes.tsv" + ext
 	} else {
-		// CSV/H5AD format: use a standardized file name
+		// CSV/H5AD/Seurat format: use a standardized file name
 		fileName = "rawCounts." + fileExtension
 	}
 
-	inferSpeciesJob := exec.builder().
-		software(assets.importSoftware("@platforma-open/milaboratories.import-sc-rnaseq-data.software:infer-species")).
+	inferSpeciesJob := exec.builder()
+
+	// Select software based on format
+	useSeuratSoftware := false
+	if format == "seurat" || format == "seurat-multi-sample" {
+		format = "seurat"
+		useSeuratSoftware = true
+		inferSpeciesJob = inferSpeciesJob.
+			software(assets.importSoftware("@platforma-open/milaboratories.import-sc-rnaseq-data.software:infer-species-seurat"))
+	} else {
+		inferSpeciesJob = inferSpeciesJob.
+			software(assets.importSoftware("@platforma-open/milaboratories.import-sc-rnaseq-data.software:infer-species"))
+	}
+
+	inferSpeciesJob = inferSpeciesJob.
 		mem("16GiB").
 		cpu(1).
 		addFile(fileName, fileToAnalyze).
 		arg(fileName).
-		arg("--format").arg(format).
+		arg("--format").arg(format)
+	
+	// Add barcodes file for MTX format
+	if hasRoleAxis {
+		inferSpeciesJob = inferSpeciesJob.
+			addFile(barcodesFileName, barcodesFile).
+			arg("--barcodes").arg(barcodesFileName)
+	}
+
+	inferSpeciesJob = inferSpeciesJob.
 		saveFileContent("species.txt").
 		saveFileContent("gene_format.txt").
+		saveFileContent("data_size.txt").
 		printErrStreamToStdout().
 		run()
 
 	return {
 		species: inferSpeciesJob.getFileContent("species.txt"),
-		geneFormat: inferSpeciesJob.getFileContent("gene_format.txt")
+		geneFormat: inferSpeciesJob.getFileContent("gene_format.txt"),
+		dataSize: inferSpeciesJob.getFileContent("data_size.txt")
 	}
 })

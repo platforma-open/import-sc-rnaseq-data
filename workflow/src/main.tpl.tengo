@@ -47,9 +47,11 @@ wf.body(func(args) {
 		inputData: readInputRun.output("data"),
 		species: inferSpeciesRun.output("species"),
 		geneFormat: inferSpeciesRun.output("geneFormat"),
+		dataSize: inferSpeciesRun.output("dataSize"),
 		importMode: importMode,
 		bundle: bundle,
 		samplesIdToLabelMap: readInputRun.output("samplesMap"),
+		sampleColumnName: readInputRun.output("sampleColumnName"),
 
 		params: smart.createJsonResource({
 			blockId: blockId

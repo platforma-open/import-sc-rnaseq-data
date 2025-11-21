@@ -1,0 +1,51 @@
+text := import("text")
+math := import("math")
+ll := import("@platforma-sdk/workflow-tengo:ll")
+
+// Memory calculation utilities for scRNA-seq data processing
+
+// Calculate required memory in GiB based on data size
+// dataSizeStr: string in format "genes cells" (e.g., "20000 5000")
+// Returns: memory in GiB as integer
+calculateMemory := func(dataSizeStr) {
+	defaultMemory := 8
+	minMemory := 2
+	maxMemory := 32
+
+	if is_undefined(dataSizeStr) || dataSizeStr == "" {
+		// Default to 8 GiB if data size is not available
+		return defaultMemory
+	}
+	
+	// Parse data size string: "genes cells"
+	data := text.trim_space(string(dataSizeStr))
+	parts := text.split(data, " ")
+	if len(parts) != 2 {
+		// Invalid format, return default
+		return defaultMemory
+	}
+	
+	genes := int(parts[0])
+	cells := int(parts[1])
+	
+	baseMemory := 1.0
+	// calculated from the average of the measurements
+	referenceBytesPerCell := 4.0
+	// Calculate total memory in bytes
+	totalMemoryBytes := float(cells) * referenceBytesPerCell * genes
+	// Add 20% safety buffer for variations in processing
+	totalMemoryBytes = totalMemoryBytes * 1.3
+	// Convert to GiB
+	totalMemoryGiB := baseMemory + totalMemoryBytes / (1024.0 * 1024.0 * 1024.0)
+	
+	// Round up to nearest integer and ensure minimum of 8 GiB
+	memGiB := int(totalMemoryGiB + 0.5)
+	memGiB = math.max(memGiB, minMemory)
+	memGiB = math.min(memGiB, maxMemory)
+	return memGiB
+}
+
+export {
+	calculateMemory: calculateMemory
+}
+

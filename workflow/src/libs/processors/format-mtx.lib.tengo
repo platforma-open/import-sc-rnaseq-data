@@ -1,0 +1,60 @@
+json := import("json")
+ll := import("@platforma-sdk/workflow-tengo:ll")
+maps := import("@platforma-sdk/workflow-tengo:maps")
+
+getFileExtension := func(compression) {
+	return compression == "gz" ? ".gz" : ""
+}
+
+addMtxFiles := func(builder, context) {
+	ext := getFileExtension(context.compression)
+	
+	return builder.
+		addFile("matrix.mtx" + ext, context.matrixFile).
+		addFile("barcodes.tsv" + ext, context.barcodesFile).
+		addFile("features.tsv" + ext, context.featuresFile).
+		arg("--matrix").arg("matrix.mtx" + ext).
+		arg("--barcodes").arg("barcodes.tsv" + ext).
+		arg("--features").arg("features.tsv" + ext)
+}
+
+buildContext := func(inputs, inputMap, geneMap) {
+	compression := inputs.compression
+	
+	if len(maps.getKeys(inputMap)) != 3 {
+		ll.panic("ERROR: Expected 3 files for MTX format, got %v", len(maps.getKeys(inputMap)))
+	}
+	
+	matrixFile := undefined
+	barcodesFile := undefined
+	featuresFile := undefined
+	
+	for sKey in maps.getKeys(inputMap) {
+		key := json.decode(sKey)
+
+		if key[0] == "barcodes.tsv" {
+			barcodesFile = inputMap[sKey]
+		} else if key[0] == "features.tsv" {
+			featuresFile = inputMap[sKey]
+		} else if key[0] == "matrix.mtx" {
+			matrixFile = inputMap[sKey]
+		}
+	}
+	
+	return {
+		compression: compression,
+		matrixFile: matrixFile,
+		barcodesFile: barcodesFile,
+		featuresFile: featuresFile
+	}
+}
+
+prepareCountMatrixArgs := func(builder, inputMap, context) {
+	return addMtxFiles(builder, context)
+}
+
+export {
+	buildContext: buildContext,
+	prepareCountMatrixArgs: prepareCountMatrixArgs
+}
+

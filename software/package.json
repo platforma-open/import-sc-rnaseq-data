@@ -14,7 +14,8 @@
   "dependencies": {},
   "devDependencies": {
     "@platforma-sdk/package-builder": "catalog:",
-    "@platforma-open/milaboratories.runenv-python-3": "catalog:"
+    "@platforma-open/milaboratories.runenv-python-3": "catalog:",
+    "@platforma-open/milaboratories.runenv-r-samples-and-data": "catalog:"
   },
   "block-software": {
     "entrypoints": {
@@ -23,7 +24,7 @@
           "artifact": {
             "type": "python",
             "registry": "platforma-open",
-            "environment": "@platforma-open/milaboratories.runenv-python-3:3.12.10-h5ad",
+            "environment": "@platforma-open/milaboratories.runenv-python-3:3.12.10",
             "dependencies": {
               "toolset": "pip",
               "requirements": "requirements.txt"
@@ -32,7 +33,7 @@
           },
           "cmd": [
             "python",
-            "{pkg}/generateCountsCsv.py"
+            "{pkg}/generate_counts.py"
           ]
         }
       },
@@ -50,7 +51,7 @@
           },
           "cmd": [
             "python",
-            "{pkg}/calculate_cellMetrics.py"
+            "{pkg}/calculate_cell_metrics.py"
           ]
         }
       },
@@ -144,21 +145,51 @@
           ]
         }
       },
-      "merge-csv": {
+      "counts-seurat": {
         "binary": {
           "artifact": {
-            "type": "python",
+            "type": "R",
             "registry": "platforma-open",
-            "environment": "@platforma-open/milaboratories.runenv-python-3:3.12.10",
-            "dependencies": {
-              "toolset": "pip",
-              "requirements": "requirements.txt"
-            },
-            "root": "./src/merge-csv"
+            "environment": "@platforma-open/milaboratories.runenv-r-samples-and-data:main",
+            "root": "./src/counts-seurat"
           },
           "cmd": [
-            "python",
-            "{pkg}/merge_csv.py"
+            "Rscript",
+            "{pkg}/extract_counts.R"
+          ]
+        },
+        "docker": {
+          "artifact": {
+            "type": "docker",
+            "context": "./src/counts-seurat",
+            "dockerfile": "./src/counts-seurat/Dockerfile"
+          },
+          "cmd": [
+            "/app/extract_counts.R"
+          ]
+        }
+      },
+      "infer-species-seurat": {
+        "binary": {
+          "artifact": {
+            "type": "R",
+            "registry": "platforma-open",
+            "environment": "@platforma-open/milaboratories.runenv-r-samples-and-data:main",
+            "root": "./src/infer-species-seurat"
+          },
+          "cmd": [
+            "Rscript",
+            "{pkg}/infer_species.R"
+          ]
+        },
+        "docker": {
+          "artifact": {
+            "type": "docker",
+            "context": "./src/infer-species-seurat",
+            "dockerfile": "./src/infer-species-seurat/Dockerfile"
+          },
+          "cmd": [
+            "/app/infer_species.R"
           ]
         }
       }

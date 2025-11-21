@@ -1,0 +1,64 @@
+self := import("@platforma-sdk/workflow-tengo:tpl")
+exec := import("@platforma-sdk/workflow-tengo:exec")
+assets := import("@platforma-sdk/workflow-tengo:assets")
+ll := import("@platforma-sdk/workflow-tengo:ll")
+pConstants := import("@platforma-sdk/workflow-tengo:pframes.constants")
+maps := import("@platforma-sdk/workflow-tengo:maps")
+json := import("json")
+
+geneMap := import(":libs.gene-map")
+
+self.defineOutputs("resultsSummaryCsv", "geneSymbolsCsv")
+
+self.body(func(inputs) {
+	inputData := inputs[pConstants.VALUE_FIELD_NAME]
+	inputMap := inputData.inputs()
+	species := inputs.species
+
+	// Build results summary job
+	resultsSummaryBuilder := exec.builder().
+		software(assets.importSoftware("@platforma-open/milaboratories.import-sc-rnaseq-data.software:results-summary")).
+		mem("16GiB").
+		cpu(1).
+		arg("-o").arg("sample_metrics.csv")
+
+	// Build map genes job
+	geneAsset := geneMap.getGeneAsset(species)
+	geneAssetName := geneMap.getAssetName(species)
+
+	mapGenesBuilder := exec.builder().
+		software(assets.importSoftware("@platforma-open/milaboratories.import-sc-rnaseq-data.software:map-genes")).
+		mem("16GiB").
+		cpu(1).
+		addAsset(geneAsset, ".", geneAssetName).
+		arg("--annotation").arg(geneAssetName).
+		arg("--output").arg("geneSymbols.csv")
+
+	// Add all input files to both jobs
+	fileIdx := 0
+	for sKey in maps.getKeys(inputMap) {
+		csvFile := inputMap[sKey]
+		fileName := "rawCounts_" + string(fileIdx) + ".csv"
+		
+		resultsSummaryBuilder.addFile(fileName, csvFile).arg("-i").arg(fileName)
+		mapGenesBuilder.addFile(fileName, csvFile).arg("--raw_counts").arg(fileName)
+		
+		fileIdx = fileIdx + 1
+	}
+
+	// Run jobs
+	resultsSummaryJob := resultsSummaryBuilder.
+		saveFile("sample_metrics.csv").
+		run()
+
+	mapGenesJob := mapGenesBuilder.
+		saveFile("geneSymbols.csv").
+		printErrStreamToStdout().
+		run()
+
+	return {
+		resultsSummaryCsv: resultsSummaryJob.getFile("sample_metrics.csv"),
+		geneSymbolsCsv: mapGenesJob.getFile("geneSymbols.csv")
+	}
+})
+

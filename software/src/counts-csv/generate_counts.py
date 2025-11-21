@@ -1,10 +1,42 @@
 import argparse
 import pandas as pd
+import polars as pl
 import scipy.io
 import gzip
 import scanpy as sc
 import anndata
-from pathlib import Path 
+import os
+import sys
+from pathlib import Path
+from datetime import datetime
+from io import BytesIO 
+
+def write_parquet(df, output_path):
+    """Write DataFrame to Parquet format using Polars for optimized performance.
+    
+    Args:
+        df: Pandas DataFrame to write
+        output_path: Path to output Parquet file
+    """
+    start_time = datetime.now()
+    total_rows = len(df)
+    
+    # Ensure output path ends with .parquet
+    if not output_path.endswith('.parquet'):
+        output_path = output_path + '.parquet'
+    
+    # Convert pandas DataFrame to Polars DataFrame
+    conversion_start = datetime.now()
+    pl_df = pl.from_pandas(df)
+    conversion_time = (datetime.now() - conversion_start).total_seconds()
+    print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Converted to Polars DataFrame in {conversion_time:.1f}s")
+    
+    # Write to Parquet format
+    pl_df.write_parquet(output_path, compression='zstd')
+    
+    end_time = datetime.now()
+    elapsed_time = (end_time - start_time).total_seconds()
+    print(f"[{end_time.strftime('%Y-%m-%d %H:%M:%S')}] Completed writing {total_rows:,} rows to {output_path} - Total time: {elapsed_time:.1f}s")
 
 def read_gzip_tsv(file_path):
     """Reads a gzipped TSV file into a pandas DataFrame."""
@@ -93,7 +125,7 @@ def process_input_files(matrix_path, barcodes_path, features_path, output_csv_pa
         df = pd.DataFrame(data, columns=["CellId", "GeneId", "Count"])
 
     print(f"Writing raw count matrix to {output_csv_path}...")
-    df.to_csv(output_csv_path, index=False)
+    write_parquet(df, output_csv_path)
 
     # Normalize counts
     print("Normalizing counts...")
@@ -122,10 +154,18 @@ def process_input_files(matrix_path, barcodes_path, features_path, output_csv_pa
         norm_df = pd.DataFrame(norm_data, columns=["SampleId", "CellId", "GeneId", "NormalizedCount"])
     else:
         norm_df = pd.DataFrame(norm_data, columns=["CellId", "GeneId", "NormalizedCount"])
-    normalized_output_csv_path = output_csv_path.replace(".csv", "_normalized.csv")
+    # Generate normalized output path with .parquet extension
+    if output_csv_path.endswith(".parquet"):
+        normalized_output_path = output_csv_path.replace(".parquet", "_normalized.parquet")
+    elif output_csv_path.endswith(".csv.gz"):
+        normalized_output_path = output_csv_path.replace(".csv.gz", "_normalized.parquet")
+    elif output_csv_path.endswith(".csv"):
+        normalized_output_path = output_csv_path.replace(".csv", "_normalized.parquet")
+    else:
+        normalized_output_path = output_csv_path + "_normalized.parquet"
 
-    print(f"Writing normalized count matrix to {normalized_output_csv_path}...")
-    norm_df.to_csv(normalized_output_csv_path, index=False)
+    print(f"Writing normalized count matrix to {normalized_output_path}...")
+    write_parquet(norm_df, normalized_output_path)
 
     print("Done!")
 
@@ -305,30 +345,37 @@ def process_csv_file(csv_path, output_csv_path, gene_format=None, annotation_pat
     cleaned_cell_names = [clean_barcode_suffix(cell) for cell in cell_names]
     print(f"Cleaned barcode suffixes. Example: {cell_names[0]} -> {cleaned_cell_names[0]}")
     
-    # Convert to long format
-    data = []
+    # Convert to long format using pandas stack (much faster than nested loops)
     print(f"Processing {df.shape[0]} genes x {df.shape[1]} cells...")
     
-    for i, gene in enumerate(gene_names):
-        for j, cell in enumerate(cleaned_cell_names):
-            count = df.iloc[i, j]
-            if count > 0:  # Only store non-zero counts
-                if sample_id:
-                    data.append([sample_id, cell, gene, count])
-                else:
-                    data.append([cell, gene, count])
+    # Update dataframe with cleaned names
+    df.index = gene_names
+    df.columns = cleaned_cell_names
     
-    print(f"Total non-zero entries: {len(data)}")
+    # Stack to convert wide to long format: creates a Series with MultiIndex (gene, cell)
+    df_stacked = df.stack()
+    
+    # Filter out zeros (much faster than doing it in a loop)
+    df_stacked = df_stacked[df_stacked > 0]
+    
+    print(f"Total non-zero entries: {len(df_stacked)}")
+    
+    # Convert to DataFrame with proper column names
+    df_long = df_stacked.reset_index()
+    df_long.columns = ["GeneId", "CellId", "Count"]
+    
+    # Reorder columns and add sample_id if needed
     if sample_id:
-        df_long = pd.DataFrame(data, columns=["SampleId", "CellId", "GeneId", "Count"])
+        df_long.insert(0, "SampleId", sample_id)
+        df_long = df_long[["SampleId", "CellId", "GeneId", "Count"]]
     else:
-        df_long = pd.DataFrame(data, columns=["CellId", "GeneId", "Count"])
+        df_long = df_long[["CellId", "GeneId", "Count"]]
     
     # Check for and handle duplicate CellId-GeneId combinations
     df_long = handle_duplicate_combinations(df_long)
     
     print(f"Writing raw count matrix to {output_csv_path}...")
-    df_long.to_csv(output_csv_path, index=False)
+    write_parquet(df_long, output_csv_path)
     
     # Normalize counts
     print("Normalizing counts...")
@@ -341,29 +388,42 @@ def process_csv_file(csv_path, output_csv_path, gene_format=None, annotation_pat
     sc.pp.normalize_total(adata, target_sum=1e4)
     normalized_matrix = adata.X
     
-    # Extract normalized counts
-    norm_data = []
-    for i, cell in enumerate(cleaned_cell_names):
-        for j, gene in enumerate(gene_names):
-            value = normalized_matrix[i, j]
-            if value > 0:  # Only store non-zero counts
-                if sample_id:
-                    norm_data.append([sample_id, cell, gene, value])
-                else:
-                    norm_data.append([cell, gene, value])
+    # Extract normalized counts using pandas (much faster than nested loops)
+    # Convert normalized matrix back to DataFrame
+    norm_df_wide = pd.DataFrame(normalized_matrix, index=cleaned_cell_names, columns=gene_names)
     
+    # Stack to convert wide to long format
+    norm_stacked = norm_df_wide.stack()
+    
+    # Filter out zeros
+    norm_stacked = norm_stacked[norm_stacked > 0]
+    
+    # Convert to DataFrame with proper column names
+    norm_df = norm_stacked.reset_index()
+    norm_df.columns = ["CellId", "GeneId", "NormalizedCount"]
+    
+    # Add sample_id if needed
     if sample_id:
-        norm_df = pd.DataFrame(norm_data, columns=["SampleId", "CellId", "GeneId", "NormalizedCount"])
+        norm_df.insert(0, "SampleId", sample_id)
+        norm_df = norm_df[["SampleId", "CellId", "GeneId", "NormalizedCount"]]
     else:
-        norm_df = pd.DataFrame(norm_data, columns=["CellId", "GeneId", "NormalizedCount"])
+        norm_df = norm_df[["CellId", "GeneId", "NormalizedCount"]]
     
     # Check for and handle duplicate CellId-GeneId combinations in normalized data
     norm_df = handle_duplicate_combinations_normalized(norm_df)
     
-    normalized_output_csv_path = output_csv_path.replace(".csv", "_normalized.csv")
+    # Generate normalized output path with .parquet extension
+    if output_csv_path.endswith(".parquet"):
+        normalized_output_path = output_csv_path.replace(".parquet", "_normalized.parquet")
+    elif output_csv_path.endswith(".csv.gz"):
+        normalized_output_path = output_csv_path.replace(".csv.gz", "_normalized.parquet")
+    elif output_csv_path.endswith(".csv"):
+        normalized_output_path = output_csv_path.replace(".csv", "_normalized.parquet")
+    else:
+        normalized_output_path = output_csv_path + "_normalized.parquet"
     
-    print(f"Writing normalized count matrix to {normalized_output_csv_path}...")
-    norm_df.to_csv(normalized_output_csv_path, index=False)
+    print(f"Writing normalized count matrix to {normalized_output_path}...")
+    write_parquet(norm_df, normalized_output_path)
     
     print("Done!")
 
@@ -390,7 +450,7 @@ def find_sample_column(obs_df, target_sample):
             
     return None
 
-def process_h5ad_file(h5ad_path, output_csv_path, sample_name=None, sample_id=None):
+def process_h5ad_file(h5ad_path, output_csv_path, sample_name=None, sample_id=None, sample_column_name=None):
     """Process an AnnData h5ad file and convert to long format CSV.
     
     Args:
@@ -398,6 +458,7 @@ def process_h5ad_file(h5ad_path, output_csv_path, sample_name=None, sample_id=No
         output_csv_path: Path to save the output CSV
         sample_name: Optional sample name to filter cells by
         sample_id: Optional sample ID to add as first column
+        sample_column_name: Optional column name to use for sample filtering
     """
     print(f"Loading h5ad file: {h5ad_path}")
     
@@ -407,10 +468,19 @@ def process_h5ad_file(h5ad_path, output_csv_path, sample_name=None, sample_id=No
     # Filter by sample if sample_name is provided
     if sample_name:
         print(f"Filtering for sample: {sample_name}")
-        sample_column = find_sample_column(adata.obs, sample_name)
         
-        if sample_column is None:
-            raise ValueError(f"Could not automatically identify the sample column containing '{sample_name}' in the h5ad file's .obs dataframe.")
+        if sample_column_name:
+            # Use provided column name
+            print(f"Using provided sample column name: '{sample_column_name}'")
+            if sample_column_name not in adata.obs.columns:
+                raise ValueError(f"Provided sample column '{sample_column_name}' not found in the h5ad file's .obs dataframe. Available columns: {list(adata.obs.columns)}")
+            sample_column = sample_column_name
+        else:
+            # Auto-detect column name
+            sample_column = find_sample_column(adata.obs, sample_name)
+            
+            if sample_column is None:
+                raise ValueError(f"Could not automatically identify the sample column containing '{sample_name}' in the h5ad file's .obs dataframe.")
         
         # Filter AnnData for the target sample
         adata = adata[adata.obs[sample_column] == sample_name].copy()
@@ -434,40 +504,41 @@ def process_h5ad_file(h5ad_path, output_csv_path, sample_name=None, sample_id=No
     # Get the count matrix
     X = adata.X
     
-    # Convert to long format for raw counts
+    # Convert to long format for raw counts (optimized)
     print(f"Processing {X.shape[0]} cells × {X.shape[1]} genes...")
-    raw_data = []
     
     if hasattr(X, 'tocoo'):
-        # Sparse matrix
-        for i, j, value in zip(X.tocoo().row, X.tocoo().col, X.tocoo().data):
-            if value > 0:
-                if sample_id:
-                    raw_data.append([sample_id, cleaned_cell_names[i], gene_names[j], value])
-                else:
-                    raw_data.append([cleaned_cell_names[i], gene_names[j], value])
+        # Sparse matrix - create DataFrame directly from COO format
+        X_coo = X.tocoo()
+        df_raw = pd.DataFrame({
+            'CellId': [cleaned_cell_names[i] for i in X_coo.row],
+            'GeneId': [gene_names[j] for j in X_coo.col],
+            'Count': X_coo.data
+        })
+        # Filter out zeros
+        df_raw = df_raw[df_raw['Count'] > 0]
     else:
-        # Dense matrix
-        for i, cell in enumerate(cleaned_cell_names):
-            for j, gene in enumerate(gene_names):
-                value = X[i, j]
-                if value > 0:
-                    if sample_id:
-                        raw_data.append([sample_id, cell, gene, value])
-                    else:
-                        raw_data.append([cell, gene, value])
+        # Dense matrix - use pandas stack for efficiency
+        df_wide = pd.DataFrame(X, index=cleaned_cell_names, columns=gene_names)
+        df_stacked = df_wide.stack()
+        df_stacked = df_stacked[df_stacked > 0]
+        df_raw = df_stacked.reset_index()
+        df_raw.columns = ["CellId", "GeneId", "Count"]
     
-    print(f"Total non-zero entries: {len(raw_data)}")
+    # Add sample_id if needed
     if sample_id:
-        df_raw = pd.DataFrame(raw_data, columns=["SampleId", "CellId", "GeneId", "Count"])
+        df_raw.insert(0, "SampleId", sample_id)
+        df_raw = df_raw[["SampleId", "CellId", "GeneId", "Count"]]
     else:
-        df_raw = pd.DataFrame(raw_data, columns=["CellId", "GeneId", "Count"])
+        df_raw = df_raw[["CellId", "GeneId", "Count"]]
+    
+    print(f"Total non-zero entries: {len(df_raw)}")
     
     # Check for and handle duplicate CellId-GeneId combinations
     df_raw = handle_duplicate_combinations(df_raw)
     
     print(f"Writing raw count matrix to {output_csv_path}...")
-    df_raw.to_csv(output_csv_path, index=False)
+    write_parquet(df_raw, output_csv_path)
     
     # Normalize counts
     print("Normalizing counts...")
@@ -476,46 +547,63 @@ def process_h5ad_file(h5ad_path, output_csv_path, sample_name=None, sample_id=No
     adata_norm = adata.copy()
     sc.pp.normalize_total(adata_norm, target_sum=1e4)
     
-    # Extract normalized counts
+    # Extract normalized counts (optimized)
     X_norm = adata_norm.X
-    norm_data = []
     
     if hasattr(X_norm, 'tocoo'):
-        # Sparse matrix
-        for i, j, value in zip(X_norm.tocoo().row, X_norm.tocoo().col, X_norm.tocoo().data):
-            if value > 0:
-                if sample_id:
-                    norm_data.append([sample_id, cleaned_cell_names[i], gene_names[j], value])
-                else:
-                    norm_data.append([cleaned_cell_names[i], gene_names[j], value])
+        # Sparse matrix - create DataFrame directly from COO format
+        X_norm_coo = X_norm.tocoo()
+        norm_df = pd.DataFrame({
+            'CellId': [cleaned_cell_names[i] for i in X_norm_coo.row],
+            'GeneId': [gene_names[j] for j in X_norm_coo.col],
+            'NormalizedCount': X_norm_coo.data
+        })
+        # Filter out zeros
+        norm_df = norm_df[norm_df['NormalizedCount'] > 0]
     else:
-        # Dense matrix
-        for i, cell in enumerate(cleaned_cell_names):
-            for j, gene in enumerate(gene_names):
-                value = X_norm[i, j]
-                if value > 0:
-                    if sample_id:
-                        norm_data.append([sample_id, cell, gene, value])
-                    else:
-                        norm_data.append([cell, gene, value])
+        # Dense matrix - use pandas stack for efficiency
+        norm_df_wide = pd.DataFrame(X_norm, index=cleaned_cell_names, columns=gene_names)
+        norm_stacked = norm_df_wide.stack()
+        norm_stacked = norm_stacked[norm_stacked > 0]
+        norm_df = norm_stacked.reset_index()
+        norm_df.columns = ["CellId", "GeneId", "NormalizedCount"]
     
+    # Add sample_id if needed
     if sample_id:
-        norm_df = pd.DataFrame(norm_data, columns=["SampleId", "CellId", "GeneId", "NormalizedCount"])
+        norm_df.insert(0, "SampleId", sample_id)
+        norm_df = norm_df[["SampleId", "CellId", "GeneId", "NormalizedCount"]]
     else:
-        norm_df = pd.DataFrame(norm_data, columns=["CellId", "GeneId", "NormalizedCount"])
+        norm_df = norm_df[["CellId", "GeneId", "NormalizedCount"]]
     
     # Check for and handle duplicate CellId-GeneId combinations in normalized data
     norm_df = handle_duplicate_combinations_normalized(norm_df)
     
-    normalized_output_csv_path = output_csv_path.replace(".csv", "_normalized.csv")
+    # Generate normalized output path with .parquet extension
+    if output_csv_path.endswith(".parquet"):
+        normalized_output_path = output_csv_path.replace(".parquet", "_normalized.parquet")
+    elif output_csv_path.endswith(".csv.gz"):
+        normalized_output_path = output_csv_path.replace(".csv.gz", "_normalized.parquet")
+    elif output_csv_path.endswith(".csv"):
+        normalized_output_path = output_csv_path.replace(".csv", "_normalized.parquet")
+    else:
+        normalized_output_path = output_csv_path + "_normalized.parquet"
     
-    print(f"Writing normalized count matrix to {normalized_output_csv_path}...")
-    norm_df.to_csv(normalized_output_csv_path, index=False)
+    print(f"Writing normalized count matrix to {normalized_output_path}...")
+    write_parquet(norm_df, normalized_output_path)
     
     print("Done!")
 
 def main():
-    parser = argparse.ArgumentParser(description="Convert .mtx.gz, .tsv.gz files or CSV files into a count matrix CSV.")
+    # Setup timing logging
+    script_name = os.path.splitext(os.path.basename(__file__))[0]
+    log_file = f"{script_name}.time.log"
+    start_time = datetime.now()
+    
+    with open(log_file, 'w') as f:
+        f.write(f"Script: {script_name}\n")
+        f.write(f"Start time: {start_time.strftime('%Y-%m-%d %H:%M:%S')}\n")
+    
+    parser = argparse.ArgumentParser(description="Convert .mtx.gz, .tsv.gz files or CSV files into a count matrix Parquet file.")
     parser.add_argument('--format', required=True, choices=['mtx', 'xsv', 'h5ad'], 
                        help="Input format: 'mtx' for 10X Genomics format, 'xsv' for CSV/TSV format, 'h5ad' for AnnData format")
     parser.add_argument('--matrix', help="Path to the matrix.mtx.gz file (required for mtx format)")
@@ -527,25 +615,44 @@ def main():
                        help="Gene identifier format: 'gene symbol' or 'Ensembl Id' (for xsv format only)")
     parser.add_argument('--annotation', help="Path to gene annotation CSV file (required when --gene-format is 'gene symbol')")
     parser.add_argument('--sample-name', help="Sample name to filter cells by (optional, for h5ad format only)")
+    parser.add_argument('--sample-column-name', help="Column name in h5ad .obs that contains sample identifiers (optional, for h5ad format only)")
     parser.add_argument('--sample-id', help="Sample ID to add as first column in output CSV")
     parser.add_argument('--output', required=True, help="Path to output the raw CSV file")
 
     args = parser.parse_args()
     
-    if args.format == 'mtx':
-        if not all([args.matrix, args.barcodes, args.features]):
-            parser.error("For mtx format, --matrix, --barcodes, and --features are required")
-        process_input_files(args.matrix, args.barcodes, args.features, args.output, args.sample_id)
-    elif args.format == 'xsv':
-        if not args.xsv:
-            parser.error("For xsv format, --xsv is required")
-        if args.gene_format == 'gene symbol' and not args.annotation:
-            parser.error("For gene format 'gene symbol', --annotation is required")
-        process_csv_file(args.xsv, args.output, args.gene_format, args.annotation, args.sample_id)
-    elif args.format == 'h5ad':
-        if not args.h5ad:
-            parser.error("For h5ad format, --h5ad is required")
-        process_h5ad_file(args.h5ad, args.output, args.sample_name, args.sample_id)
+    try:
+        if args.format == 'mtx':
+            if not all([args.matrix, args.barcodes, args.features]):
+                parser.error("For mtx format, --matrix, --barcodes, and --features are required")
+            process_input_files(args.matrix, args.barcodes, args.features, args.output, args.sample_id)
+        elif args.format == 'xsv':
+            if not args.xsv:
+                parser.error("For xsv format, --xsv is required")
+            if args.gene_format == 'gene symbol' and not args.annotation:
+                parser.error("For gene format 'gene symbol', --annotation is required")
+            process_csv_file(args.xsv, args.output, args.gene_format, args.annotation, args.sample_id)
+        elif args.format == 'h5ad':
+            if not args.h5ad:
+                parser.error("For h5ad format, --h5ad is required")
+            process_h5ad_file(args.h5ad, args.output, args.sample_name, args.sample_id, args.sample_column_name)
+    except Exception as e:
+        # Log end time even on error
+        end_time = datetime.now()
+        duration = end_time - start_time
+        with open(log_file, 'a') as f:
+            f.write(f"End time: {end_time.strftime('%Y-%m-%d %H:%M:%S')}\n")
+            f.write(f"Total duration: {duration.total_seconds():.2f} seconds ({duration})\n")
+            f.write(f"Status: ERROR - {str(e)}\n")
+        raise
+    
+    # Log end time and duration
+    end_time = datetime.now()
+    duration = end_time - start_time
+    
+    with open(log_file, 'a') as f:
+        f.write(f"End time: {end_time.strftime('%Y-%m-%d %H:%M:%S')}\n")
+        f.write(f"Total duration: {duration.total_seconds():.2f} seconds ({duration})\n")
 
 if __name__ == "__main__":
     main()

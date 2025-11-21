@@ -12,11 +12,10 @@ pfSymbolsConv := import(":libs.pf-symbols-conv")
 exportCountsConv := import(":libs.export-counts")
 exportNormCountsConv := import(":libs.export-norm-counts")
 resultsSummaryConv := import(":libs.results-summary-conv")
+memoryCalc := import(":libs.memory-calc")
 
 importCountsTpl := assets.importTemplate(":import-counts")
-resultsSummaryTpl := assets.importTemplate(":results-summary")
-mapGenesTpl := assets.importTemplate(":map-genes")
-mergeCsvTpl := assets.importTemplate(":merge-csv")
+collectResultsTpl := assets.importTemplate(":collect-results")
 
 makeTraceStep := func(blockId) {
 	return {type: "milaboratories.import-sc-rnaseq-data", id: blockId, importance: 20, label: "Import scRNA-seq Data"}
@@ -26,6 +25,8 @@ self.awaitState("params", "ResourceReady")
 self.awaitState("inputSpec", "ResourceReady")
 self.awaitState("species", "ResourceReady")
 self.awaitState("geneFormat", "ResourceReady")
+self.awaitState("dataSize", "ResourceReady")
+self.awaitState("sampleColumnName", "ResourceReady")
 
 self.body(func(inputs) {
 	blockId := inputs.params.blockId
@@ -36,10 +37,20 @@ self.body(func(inputs) {
 	inputSpec := inputs.inputSpec
 	inputData := inputs.inputData
 	samplesIdToLabelMap := inputs.samplesIdToLabelMap
+	sampleColumnName := inputs.sampleColumnName
 
 	fileExtension := inputSpec.domain["pl7.app/fileExtension"]
 	sampleAxisSpec :=  inputSpec.axesSpec[0]
 	compression := inputSpec.domain["pl7.app/compression"]
+	
+	// Calculate memory based on data size if available, otherwise use provided or default
+	// at the moment we only calculate memory based by the first sample, assuming all samples
+	// are similar in size
+	dataSizeStr := undefined
+	if !is_undefined(inputs.dataSize) {
+		dataSizeStr = string(inputs.dataSize.getData())
+	}
+	calculatedMemGiB := memoryCalc.calculateMemory(dataSizeStr)
 
 	// In MTX format aggregate by role axis
 	aggregate := []
@@ -57,52 +68,55 @@ self.body(func(inputs) {
 		    aggregate: aggregate,
 		    passKey: true,
 		    traceSteps: [makeTraceStep(blockId)],
-		    extra: {
+			extra: {
 				species: species,
 				fileExtension: fileExtension,
 				geneFormat: geneFormat,
+				dataSize: inputs.dataSize,
 				importMode: importMode,
 				compression: compression,
-				samplesIdToLabelMap: samplesIdToLabelMap
+				samplesIdToLabelMap: samplesIdToLabelMap,
+				sampleColumnName: sampleColumnName
+			},
+			metaExtra: {
+				mem: calculatedMemGiB,
+				cpu: 2
 			}
-			// ,
-			// metaExtra: {
-			// 	mem: inputs.params.mem,
-			// 	cpu: inputs.params.cpu
-			// }
 		}
 	)
 
 	cellMetricsPf := importingCountsResults.xsvOutputFrame("cellMetrics")
 
-	// Merge rawCountsCsv from all samples
-	mergeCsvResults := pframes.processColumn(
+	// Collect results (summary and gene symbols) from all samples
+	collectResults := pframes.processColumn(
 		importingCountsResults.output("rawCountsCsv"),
-		mergeCsvTpl,
-		targetOutputs.getMergedCsvOutput(blockId),
+		collectResultsTpl,
+		targetOutputs.getCollectResultsOutput(blockId),
 		{
 			aggregate: [sampleAxisSpec],
-			traceSteps: [makeTraceStep(blockId)]
+			traceSteps: [makeTraceStep(blockId)],
+			extra: {
+				species: species
+			}
 		}
 	)
-	
-	mergedRawCountsCsvData := mergeCsvResults.outputData("mergedCsv")
-	mergedCsvFile := mergedRawCountsCsvData.getFutureInputField(string(json.encode([])))
 
 	// Build pFrame from rawCounts to pass directly to ptabler
 	rawCountsPf := pframes.pFrameBuilder()
-	rawCountsPf.add("rawCounts", importingCountsResults.outputSpec("rawCounts", "rawCounts"), importingCountsResults.outputData("rawCounts", "rawCounts"))
+	rawCountsPf.add("rawCounts", importingCountsResults.outputSpec("rawCounts", "rawCounts"),
+		importingCountsResults.outputData("rawCounts", "rawCounts"))
 	rawCountsPfBuilt := rawCountsPf.build()
 
-	// Summary table
 
-	resultsSummary := render.create(resultsSummaryTpl, {
-		filteredGenesCountsCsv: mergedCsvFile
-	})
-
-	resultsSummaryCsv := resultsSummary.output("resultsSummaryCsv")
+	resultsSummaryCsvData := collectResults.outputData("resultsSummaryCsv")
+	resultsSummaryCsv := resultsSummaryCsvData.getFutureInputField(string(json.encode([])))
 	resultsSummaryConvParams := resultsSummaryConv.getColumns(blockId, species, inputSpec)
-	resultsSummaryPf := xsv.importFile(resultsSummaryCsv, "csv", resultsSummaryConvParams, { mem: "16GiB", cpu: 1 })
+	resultsSummaryPf := xsv.importFile(resultsSummaryCsv, "csv", resultsSummaryConvParams, {})
+
+	geneSymbolsCsvData := collectResults.outputData("geneSymbolsCsv")
+	geneSymbolsCsv := geneSymbolsCsvData.getFutureInputField(string(json.encode([])))
+	geneSymbolsImportParams := pfSymbolsConv.getColumns(species)
+	geneSymbolsPf := xsv.importFile(geneSymbolsCsv, "csv", geneSymbolsImportParams,{})
 
 	// // Highly Variable Genes calculation
 	// hvgResults := render.create(hvgTpl, {
@@ -116,16 +130,6 @@ self.body(func(inputs) {
 	// // Convert to pFrames
 	// hvgCountsPf := xsv.importFile(hvgCountsCsv, "csv", countCsvParams, { mem: "16GiB", cpu: 1 })
 	// hvgNormCountsPf := xsv.importFile(hvgNormalizedCountsCsv, "csv", normCountCsvParams, { mem: "16GiB", cpu: 1 })
-
-	mapGenesResults := render.create(mapGenesTpl, {
-		filteredGenesCountsCsv: mergedCsvFile,
-		species: species
-	})
-
-	geneSymbolsCsv := mapGenesResults.output("geneSymbolsCsv")
-
-	geneSymbolsImportParams := pfSymbolsConv.getColumns(species)
-	geneSymbolsPf := xsv.importFile(geneSymbolsCsv, "csv", geneSymbolsImportParams, { mem: "16GiB", cpu: 1 })
 
 	trace := pSpec.makeTrace(inputSpec, makeTraceStep(blockId))
 

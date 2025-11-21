@@ -1,86 +1,13 @@
 self := import("@platforma-sdk/workflow-tengo:tpl")
 ll := import("@platforma-sdk/workflow-tengo:ll")
 maps := import("@platforma-sdk/workflow-tengo:maps")
-json := import("json")
-smart := import("@platforma-sdk/workflow-tengo:smart")
-consts := import("@platforma-sdk/workflow-tengo:pframes.constants")
-pframes := import("@platforma-sdk/workflow-tengo:pframes")
-pColumn := import("@platforma-sdk/workflow-tengo:pframes.pcolumn")
 
+inputUtils := import(":libs.input-utils")
 
-self.defineOutputs("importMode", "data", "spec", "samplesMap")
+self.defineOutputs("importMode", "data", "spec", "samplesMap", "sampleColumnName")
 self.awaitState("bundle", "PColumnBundle")
 self.awaitState("inputSpec", "ResourceReady")
 self.awaitState("inputData", "ResourceReady")
-
-RTYPE_P_COLUMN_DATA_JSON := consts.RTYPE_P_COLUMN_DATA_JSON
-
-mapToPValueData := func(map) {
-	data := {}
-	for key, value in map {
-		data[json.encode([key])] = value
-	}
-	result := {
-		keyLength: 1,
-		data: data
-	}
-	return result
-}
-
-createJsonPColumnData := func(data) {
-	return smart.createValueResource(RTYPE_P_COLUMN_DATA_JSON, json.encode(mapToPValueData(data)))
-}
-
-parseSampleGroups := func(linker) {
-    data := json.decode(linker.data.getData())
-    result := {}
-    for key, value in data {
-        k := json.decode(key)
-        if is_undefined(result[k[0]]) {
-            result[k[0]] = {}
-        }
-        result[k[0]][k[1]] = value
-    }
-    return result
-}
-
-isMultiSample := func(spec) {
-	isPFrameSpec := maps.containsKey(spec, "columns")
-
-	if isPFrameSpec {
-		for _, columnSpec in spec.columns {
-			if columnSpec.name == "pl7.app/sequencing/data" {
-				if len(columnSpec.axesSpec) == 1 && columnSpec.axesSpec[0].name == "pl7.app/sampleGroupId" {
-					return true
-				}
-				break
-			}
-		}
-	} else {
-		if maps.containsKey(spec, "axesSpec") && len(spec.axesSpec) == 1 && spec.axesSpec[0].name == "pl7.app/sampleGroupId" {
-			return true
-		}
-	}
-	return false
-}
-
-createDatasetSpec := func(sampleIds, sampleIdAxis) {
-	dsSpec := {
-		kind: "PColumn",
-		name: "pl7.app/sequencing/data",
-		domain: maps.clone({
-			"pl7.app/fileExtension": "h5ad",
-			"pl7.app/compression": ""
-		}, { removeUndefs: true }),
-		valueType: "File",
-		annotations: {
-			"pl7.app/label": "Sequencing Data",
-			"pl7.app/axisKeys/0": string(json.encode(sampleIds))
-		},
-		axesSpec: [sampleIdAxis]
-	}
-	return dsSpec
-}
 
 self.body(func(inputs) {
 	spec := inputs.inputSpec
@@ -89,6 +16,7 @@ self.body(func(inputs) {
 	
 	importMode := undefined
 	samplesMap := {}
+	sampleColumnName := ""
 	// Check for MTX (has cellRangerFileRole axis)
 	if maps.containsKey(spec, "axesSpec") && spec.axesSpec != undefined {
 		for _, axis in spec.axesSpec {
@@ -99,11 +27,13 @@ self.body(func(inputs) {
 		}
 	}
 	
-	// Check for h5ad or csv based on file extension
+	// Check for h5ad, seurat, or csv based on file extension
 	if importMode == undefined && maps.containsKey(spec, "domain") && spec.domain != undefined {
 		fileExt := spec.domain["pl7.app/fileExtension"]
 		if fileExt == "h5ad" {
 			importMode = "h5ad"
+		} else if fileExt == "rds" {
+			importMode = "seurat"
 		} else if fileExt == "csv" || fileExt == "csv.gz" || fileExt == "tsv" || fileExt == "tsv.gz" {
 			importMode = "csv"
 		}
@@ -113,42 +43,34 @@ self.body(func(inputs) {
 		ll.panic("Could not infer import mode from dataset spec: %v", spec)
 	}
 	
-	// For multi-sample H5AD, read list of samples from sampleGroup and 
-	// create a new spec and data with samples, instead of sample groups§
-	if importMode == "h5ad" && isMultiSample(spec) {
-		importMode = "h5ad-multi-sample"
-		dataset := bundle.getColumn("main")
-		linker := bundle.getColumns("linker")[0]
-		sampleGroups := parseSampleGroups(linker)
-
-		h5ad_file_key := maps.getKeys(dataset.data.inputs())[0]
-		h5ad_file := dataset.data.inputs()[h5ad_file_key]
-
-		sampleIds := []
-		for groupId, samples in sampleGroups {
-			for sampleId, sampleName in samples {
-				samplesMap[sampleId] = sampleName
-				sampleIds = append(sampleIds, sampleId)
-			}
+	// For multi-sample formats, read list of samples from sampleGroup and 
+	// create a new spec and data with samples, instead of sample groups
+	if importMode == "h5ad" && inputUtils.isMultiSample(spec) {
+		result := inputUtils.processMultiSample(bundle, "h5ad-multi-sample", "h5ad")
+		return {
+			importMode: result.importMode,
+			spec: result.spec,
+			data: result.data,
+			samplesMap: result.samplesMap,
+			sampleColumnName: result.sampleColumnName
 		}
-
-		sampleIdAxis := linker.spec.axesSpec[1]
-		dsSpec := createDatasetSpec(sampleIds, sampleIdAxis)
-
-		dataBuilder := pColumn.resourceMapBuilder(1)
-		for sampleId in sampleIds {
-			dataBuilder.add([sampleId], h5ad_file)
+	} else if importMode == "seurat" && inputUtils.isMultiSample(spec) {
+		result := inputUtils.processMultiSample(bundle, "seurat-multi-sample", "rds")
+		return {
+			importMode: result.importMode,
+			spec: result.spec,
+			data: result.data,
+			samplesMap: result.samplesMap,
+			sampleColumnName: result.sampleColumnName
 		}
-
-		spec = dsSpec
-		data = dataBuilder.build()
 	}
 	
 	return {
 		importMode: importMode,
 		data: data,
 		spec: spec,
-		samplesMap: samplesMap
+		samplesMap: samplesMap,
+		sampleColumnName: sampleColumnName
 	}
 })
 

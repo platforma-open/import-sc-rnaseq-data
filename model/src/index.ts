@@ -50,7 +50,7 @@ export const model = BlockModel.create()
     return ctx.resultPool.getOptions((v) => {
       if (!isPColumnSpec(v)) return false;
 
-      // Accept all three types: csv/tsv, h5ad, and mtx
+      // Accept all four types: csv/tsv, h5ad, rds (Seurat), and mtx
       const domain = v.domain;
       const hasRoleAxis = v.axesSpec?.some((axis) => axis.name === 'pl7.app/sc/cellRangerFileRole');
 
@@ -63,19 +63,18 @@ export const model = BlockModel.create()
       const isH5ad = domain !== undefined
         && domain['pl7.app/fileExtension'] === 'h5ad';
 
+      const isRds = domain !== undefined
+        && domain['pl7.app/fileExtension'] === 'rds';
+
       const isMtx = hasRoleAxis;
 
       return (
         v.name === 'pl7.app/sequencing/data'
         && (v.valueType as string) === 'File'
-        && (isCsv || isH5ad || isMtx)
+        && (isCsv || isH5ad || isRds || isMtx)
       );
     },
     );
-  })
-
-  .retentiveOutput('data', (ctx) => {
-    return ctx.prerun?.resolve({ field: 'data', allowPermanentAbsence: true })?.getDataAsJson<unknown>();
   })
 
   .output('errorLog', (ctx) => {
