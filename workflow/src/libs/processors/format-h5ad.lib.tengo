@@ -29,13 +29,25 @@ buildContext := func(inputs, inputMap, geneMap) {
 		fileExtension: inputs.fileExtension,
 		importMode: string(inputs.importMode),
 		sampleName: inputs.samplesIdToLabelMap[sampleId],
-		sampleColumnName: inputs.sampleColumnName
+		sampleColumnName: inputs.sampleColumnName,
+		geneFormat: inputs.geneFormat,
+		geneAsset: geneMap.getGeneAsset(inputs.species),
+		geneAssetName: geneMap.getAssetName(inputs.species)
 	}
 }
 
 prepareCountMatrixArgs := func(builder, inputMap, context) {
 	builder = addH5adFile(builder, inputMap, context)
 	builder = addMultiSampleArgs(builder, context)
+	
+	builder = builder.arg("--gene-format").arg(context.geneFormat)
+	
+	if context.geneFormat == "gene symbol" {
+		builder = builder.
+			addAsset(context.geneAsset, ".", context.geneAssetName).
+			arg("--annotation").arg(context.geneAssetName)
+	}
+	
 	return builder
 }
 
