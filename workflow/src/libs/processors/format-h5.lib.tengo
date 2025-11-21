@@ -14,12 +14,9 @@ addH5File := func(builder, inputMap, context) {
 }
 
 buildContext := func(inputs, inputMap, geneMap) {
-	sampleId := inputs[pConstants.KEY_FIELD_NAME][0]
 	return {
 		fileExtension: inputs.fileExtension,
-		importMode: string(inputs.importMode),
-		sampleName: inputs.samplesIdToLabelMap[sampleId],
-		sampleColumnName: inputs.sampleColumnName
+		importMode: string(inputs.importMode)
 	}
 }
 

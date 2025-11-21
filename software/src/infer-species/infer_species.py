@@ -18,7 +18,7 @@ import sys
 import re
 import random
 from pathlib import Path
-from typing import List, Tuple, Optional, Dict, Set
+from typing import List, Tuple, Dict
 import polars as pl
 import scanpy as sc
 
@@ -26,6 +26,56 @@ import scanpy as sc
 class SpeciesInferenceError(Exception):
     """Custom exception for species inference errors."""
     pass
+
+
+# Module-level constants
+SPECIES_NAME_MAPPING = {
+    'human': 'homo-sapiens',
+    'mouse': 'mus-musculus',
+    'rat': 'rattus-norvegicus',
+    'zebrafish': 'danio-rerio',
+    'fly': 'drosophila-melanogaster',
+    'worm': 'caenorhabditis-elegans',
+    'yeast': 'saccharomyces-cerevisiae',
+    'arabidopsis': 'arabidopsis-thaliana',
+    'chicken': 'gallus-gallus',
+    'cow': 'bos-taurus',
+    'pig': 'sus-scrofa'
+}
+
+TIE_BREAKER_PRIORITY = ['yeast', 'worm', 'arabidopsis', 'fly', 'zebrafish', 'rat', 'mouse', 'chicken', 'cow', 'pig', 'human']
+
+GENE_FORMAT_MAPPING = {
+    'symbol': 'gene symbol',
+    'ensembl': 'Ensembl Id',
+    'entrez': 'Entrez Id'
+}
+
+
+def _select_best_species(species_scores: Dict[str, float]) -> str:
+    """
+    Select the best species from species scores using tie-breaking logic.
+    
+    Args:
+        species_scores: Dictionary mapping species names to confidence scores
+        
+    Returns:
+        Best species name (internal format, e.g., 'human')
+    """
+    if not species_scores:
+        raise SpeciesInferenceError("No species scores provided")
+    
+    max_score = max(species_scores.values())
+    best_candidates = [species for species, score in species_scores.items() if score == max_score]
+    
+    # Tie-breaking priority: prioritize species with more distinctive patterns
+    best_species = best_candidates[0]  # Default to first candidate
+    for priority_species in TIE_BREAKER_PRIORITY:
+        if priority_species in best_candidates:
+            best_species = priority_species
+            break
+    
+    return best_species
 
 
 class GeneIdentifierAnalyzer:
@@ -373,7 +423,6 @@ class GeneIdentifierAnalyzer:
     def __init__(self):
         self.gene_identifiers = []
         self.identifier_type = None
-        self.species_scores = {}
     
     def analyze_identifiers(self, identifiers: List[str]) -> Dict[str, float]:
         """
@@ -697,35 +746,11 @@ def infer_species_from_mtx(features_file: str) -> Tuple[str, int]:
         if not species_scores:
             raise SpeciesInferenceError("Could not infer species from gene identifiers")
         
-        # Get the species with the highest score
-        max_score = max(species_scores.values())
-        best_candidates = [species for species, score in species_scores.items() if score == max_score]
-        
-        # Tie-breaking priority: prioritize species with more distinctive patterns
-        tie_breaker_priority = ['yeast', 'worm', 'arabidopsis', 'fly', 'zebrafish', 'rat', 'mouse', 'chicken', 'cow', 'pig', 'human']
-        
-        best_species = best_candidates[0]  # Default to first candidate
-        for priority_species in tie_breaker_priority:
-            if priority_species in best_candidates:
-                best_species = priority_species
-                break
+        # Get the best species using tie-breaking logic
+        best_species = _select_best_species(species_scores)
         
         # Convert to standard format (e.g., "homo-sapiens")
-        species_mapping = {
-            'human': 'homo-sapiens',
-            'mouse': 'mus-musculus',
-            'rat': 'rattus-norvegicus',
-            'zebrafish': 'danio-rerio',
-            'fly': 'drosophila-melanogaster',
-            'worm': 'caenorhabditis-elegans',
-            'yeast': 'saccharomyces-cerevisiae',
-            'arabidopsis': 'arabidopsis-thaliana',
-            'chicken': 'gallus-gallus',
-            'cow': 'bos-taurus',
-            'pig': 'sus-scrofa'
-        }
-        
-        species = species_mapping.get(best_species, best_species)
+        species = SPECIES_NAME_MAPPING.get(best_species, best_species)
         return (species, num_genes)
         
     except Exception as e:
@@ -757,73 +782,14 @@ def _infer_species_from_anndata(adata) -> str:
         if not species_scores:
             raise SpeciesInferenceError("Could not infer species from gene identifiers")
         
-        # Get the species with the highest score
-        max_score = max(species_scores.values())
-        best_candidates = [species for species, score in species_scores.items() if score == max_score]
-        
-        # Tie-breaking priority
-        tie_breaker_priority = ['yeast', 'worm', 'arabidopsis', 'fly', 'zebrafish', 'rat', 'mouse', 'chicken', 'cow', 'pig', 'human']
-        
-        best_species = best_candidates[0]
-        for priority_species in tie_breaker_priority:
-            if priority_species in best_candidates:
-                best_species = priority_species
-                break
+        # Get the best species using tie-breaking logic
+        best_species = _select_best_species(species_scores)
         
         # Convert to standard format
-        species_mapping = {
-            'human': 'homo-sapiens',
-            'mouse': 'mus-musculus',
-            'rat': 'rattus-norvegicus',
-            'zebrafish': 'danio-rerio',
-            'fly': 'drosophila-melanogaster',
-            'worm': 'caenorhabditis-elegans',
-            'yeast': 'saccharomyces-cerevisiae',
-            'arabidopsis': 'arabidopsis-thaliana',
-            'chicken': 'gallus-gallus',
-            'cow': 'bos-taurus',
-            'pig': 'sus-scrofa'
-        }
-        
-        return species_mapping.get(best_species, best_species)
+        return SPECIES_NAME_MAPPING.get(best_species, best_species)
         
     except Exception as e:
         raise SpeciesInferenceError(f"Error inferring species: {e}")
-
-def infer_species_from_h5ad(input_file: str) -> str:
-    """
-    Infer species from an AnnData h5ad file.
-    
-    Args:
-        input_file: Path to the .h5ad file
-        
-    Returns:
-        Inferred species name
-    """
-    # Load the h5ad file
-    adata = sc.read_h5ad(input_file)
-    # Use common function to infer species
-    return _infer_species_from_anndata(adata, "h5ad")
-
-def infer_species_from_h5(input_file: str = None, adata=None) -> str:
-    """
-    Infer species from a 10x Genomics Cell Ranger HDF5 (h5) file.
-    
-    Args:
-        input_file: Path to the .h5 file (required if adata is not provided)
-        adata: AnnData object (optional, if provided, input_file is ignored)
-        
-    Returns:
-        Inferred species name
-    """
-    # Load the 10x h5 file if adata is not provided
-    if adata is None:
-        if input_file is None:
-            raise ValueError("Either input_file or adata must be provided")
-        adata = sc.read_10x_h5(input_file)
-    # Use common function to infer species
-    return _infer_species_from_anndata(adata, "h5")
-
 
 def infer_species(input_file: str) -> str:
     """
@@ -850,37 +816,11 @@ def infer_species(input_file: str) -> str:
         if not species_scores:
             raise SpeciesInferenceError("Could not infer species from gene identifiers")
         
-        # Get the species with the highest score
-        # If there's a tie, prefer human over other mammals
-        max_score = max(species_scores.values())
-        best_candidates = [species for species, score in species_scores.items() if score == max_score]
-        
-        # Tie-breaking priority: prioritize species with more distinctive patterns
-        # Order: most distinctive patterns first (yeast, worm, arabidopsis, fly, zebrafish, rat, mouse, chicken, cow, pig, human)
-        tie_breaker_priority = ['yeast', 'worm', 'arabidopsis', 'fly', 'zebrafish', 'rat', 'mouse', 'chicken', 'cow', 'pig', 'human']
-        
-        best_species = best_candidates[0]  # Default to first candidate
-        for priority_species in tie_breaker_priority:
-            if priority_species in best_candidates:
-                best_species = priority_species
-                break
+        # Get the best species using tie-breaking logic
+        best_species = _select_best_species(species_scores)
         
         # Convert to standard format (e.g., "homo-sapiens")
-        species_mapping = {
-            'human': 'homo-sapiens',
-            'mouse': 'mus-musculus',
-            'rat': 'rattus-norvegicus',
-            'zebrafish': 'danio-rerio',
-            'fly': 'drosophila-melanogaster',
-            'worm': 'caenorhabditis-elegans',
-            'yeast': 'saccharomyces-cerevisiae',
-            'arabidopsis': 'arabidopsis-thaliana',
-            'chicken': 'gallus-gallus',
-            'cow': 'bos-taurus',
-            'pig': 'sus-scrofa'
-        }
-        
-        return species_mapping.get(best_species, best_species)
+        return SPECIES_NAME_MAPPING.get(best_species, best_species)
         
     except Exception as e:
         raise SpeciesInferenceError(f"Error inferring species: {e}")
@@ -939,13 +879,7 @@ def main():
             gene_analyzer.analyze_identifiers(gene_identifiers)
             
             # Map identifier type to format name
-            format_mapping = {
-                'symbol': 'gene symbol',
-                'ensembl': 'Ensembl Id', 
-                'entrez': 'Entrez Id'
-            }
-            
-            gene_format = format_mapping.get(gene_analyzer.identifier_type, 'unknown')
+            gene_format = GENE_FORMAT_MAPPING.get(gene_analyzer.identifier_type, 'unknown')
             
             # Calculate data size: rows = genes, columns = cells
             n_rows, n_cols = analyzer.df.shape
@@ -997,12 +931,7 @@ def main():
             gene_analyzer = GeneIdentifierAnalyzer()
             gene_analyzer.analyze_identifiers(gene_identifiers)
             
-            format_mapping = {
-                'symbol': 'gene symbol',
-                'ensembl': 'Ensembl Id',
-                'entrez': 'Entrez Id'
-            }
-            gene_format = format_mapping.get(gene_analyzer.identifier_type, 'unknown')
+            gene_format = GENE_FORMAT_MAPPING.get(gene_analyzer.identifier_type, 'unknown')
             
             # Calculate data size: adata.shape = (n_obs, n_vars) = (cells, genes)
             # So rows = genes, columns = cells
