@@ -161,8 +161,8 @@
         "docker": {
           "artifact": {
             "type": "docker",
-            "context": "./src/counts-seurat",
-            "dockerfile": "./src/counts-seurat/Dockerfile"
+            "context": "./src/seurat-utils",
+            "dockerfile": "./src/seurat-utils/Dockerfile"
           },
           "cmd": [
             "/app/seurat_operations.R"
