@@ -5,6 +5,7 @@ maps := import("@platforma-sdk/workflow-tengo:maps")
 inputUtils := import(":libs.input-utils")
 
 self.defineOutputs("importMode", "data", "spec", "samplesMap", "sampleColumnName")
+self.awaitState("InputsLocked")
 self.awaitState("bundle", "PColumnBundle")
 self.awaitState("inputSpec", "ResourceReady")
 self.awaitState("inputData", "ResourceReady")

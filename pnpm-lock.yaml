@@ -229,12 +229,6 @@ importers:
       '@platforma-sdk/tengo-builder':
         specifier: 'catalog:'
         version: 2.3.10
-      '@platforma-sdk/test':
-        specifier: 'catalog:'
-        version: 1.45.35(@types/node@24.5.2)(yaml@2.8.1)
-      vitest:
-        specifier: 'catalog:'
-        version: 4.0.10(@types/node@24.5.2)(yaml@2.8.1)
 
 packages:
 
