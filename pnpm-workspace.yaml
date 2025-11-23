@@ -8,23 +8,23 @@ packages:
 
 catalog:
   "@platforma-sdk/model": ^1.45.35
-  "@platforma-sdk/ui-vue": ^1.45.36
-  "@platforma-sdk/workflow-tengo": ^5.6.1
+  "@platforma-sdk/ui-vue": ^1.45.37
+  "@platforma-sdk/workflow-tengo": ^5.6.2
   "@platforma-sdk/block-tools": ^2.6.22
   "@platforma-sdk/tengo-builder": ^2.3.10
   "@platforma-sdk/package-builder": ^3.10.7
   "@platforma-sdk/eslint-config": ^1.1.0
   "@platforma-sdk/blocks-deps-updater": ^2.0.0
-  "@milaboratories/graph-maker": ^1.1.180
+  "@milaboratories/graph-maker": ^1.1.184
 
-  "@platforma-open/milaboratories.runenv-python-3": ^1.6.2
+  "@platforma-open/milaboratories.runenv-python-3": ^1.7.4
   "@platforma-open/milaboratories.runenv-r-samples-and-data": ^1.0.4
   "@platforma-open/milaboratories.gene-annotations-assets": ^1.1.0
 
-  "@platforma-sdk/test": 1.45.35
+  "@platforma-sdk/test": 1.45.39
   "@milaboratories/helpers": 1.12.0
   
-  "vue": ^3.5.15
+  "vue": ^3.5.24
   "vue-tsc": ^2.2.10
   
   "typescript": ~5.5.4
@@ -38,4 +38,4 @@ catalog:
   "@changesets/cli": ^2.29.5
 
   "@platforma-open/milaboratories.samples-and-data": ^1.11.1
-  "@platforma-open/milaboratories.samples-and-data.model": ^1.11.1
+  "@platforma-open/milaboratories.samples-and-data.model": ^2.3.0
