@@ -33,6 +33,13 @@ wf.body(func(args) {
 			outputs: {},
 			exports: {}
 		}
+	} else if importMode == "h5" {
+		// Skip check for H5 format (not implemented yet)
+		// Return empty outputs - errorLog will be undefined and allowed by model
+		return {
+			outputs: {},
+			exports: {}
+		}
 	} else if (importMode == "seurat" || importMode == "seurat-multi-sample") {
 		// Skip check for Seurat format (not implemented yet)
 		// Return empty outputs - errorLog will be undefined and allowed by model

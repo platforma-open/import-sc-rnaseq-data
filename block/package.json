@@ -8,6 +8,8 @@
     "prepublishOnly": "block-tools pack && block-tools publish -r 's3://milab-euce1-prod-pkgs-s3-block-registry/pub/releases/?region=eu-central-1'",
     "do-pack": "rm -f *.tgz && block-tools pack && pnpm pack && mv *.tgz package.tgz"
   },
+  "main": "index.js",
+  "types": "index.d.ts",
   "files": [
     "index.d.ts",
     "index.js"
