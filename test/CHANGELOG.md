@@ -1,5 +1,12 @@
 # @platforma-open/milaboratories.import-sc-rnaseq-data.test
 
+## 1.1.2
+
+### Patch Changes
+
+- Updated dependencies [34f4c2e]
+  - @platforma-open/milaboratories.import-sc-rnaseq-data.model@1.5.0
+
 ## 1.1.1
 
 ### Patch Changes

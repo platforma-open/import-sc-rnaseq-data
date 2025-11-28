@@ -1,5 +1,11 @@
 # @platforma-open/milaboratories.import-sc-rnaseq-data.software
 
+## 1.6.0
+
+### Minor Changes
+
+- 34f4c2e: H5 file format support
+
 ## 1.5.0
 
 ### Minor Changes
