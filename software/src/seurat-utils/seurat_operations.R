@@ -23,6 +23,18 @@ parser$add_argument("input_file", nargs = "?", help = "Path to input Seurat RDS 
 
 args <- parser$parse_args()
 
+# Helper function to get assay data with compatibility for both old and new Seurat versions
+# Seurat 5.0.0+ uses 'layer' argument, older versions use 'slot'
+get_assay_data_compat <- function(seurat_obj, layer_name) {
+  tryCatch({
+    # Try new API first (Seurat 5.0.0+)
+    GetAssayData(seurat_obj, layer = layer_name)
+  }, error = function(e) {
+    # Fall back to old API (Seurat < 5.0.0)
+    GetAssayData(seurat_obj, slot = layer_name)
+  })
+}
+
 # Clean barcode suffix (remove "-1", "-2", etc. for 10X Genomics format)
 clean_barcode_suffix <- function(barcode) {
   if (grepl("^-", barcode)) {
@@ -87,9 +99,9 @@ add_sample_id_column <- function(dt, sample_id, count_column_name = "Count") {
 normalize_counts <- function(counts, seurat_obj) {
   start_time <- Sys.time()
   
-  # Get normalized data (slot = "data" contains log-normalized data)
+  # Get normalized data (layer = "data" contains log-normalized data)
   # If not available, normalize manually
-  normalized <- GetAssayData(seurat_obj, slot = "data")
+  normalized <- get_assay_data_compat(seurat_obj, "data")
   
   # If data slot is empty or same as counts, normalize manually
   if (length(normalized) == 0 || identical(normalized, counts)) {
@@ -282,7 +294,7 @@ operation_extract_counts <- function() {
     cat(paste("Seurat object shape:", ncol(seurat_obj), "cells ×", nrow(seurat_obj), "genes\n"), file = stderr())
     
     # Get counts matrix
-    counts <- GetAssayData(seurat_obj, slot = "counts")
+    counts <- get_assay_data_compat(seurat_obj, "counts")
     
     # Get gene and cell identifiers
     gene_names <- rownames(counts)
@@ -368,7 +380,7 @@ operation_infer_species <- function() {
     }
     
     # Get gene names from counts matrix
-    counts <- GetAssayData(seurat_obj, slot = "counts")
+    counts <- get_assay_data_compat(seurat_obj, "counts")
     gene_names <- rownames(counts)
     
     cat(paste("Analyzing", length(gene_names), "genes...\n"), file = stderr())
@@ -538,7 +550,7 @@ operation_check_input <- function() {
     
     # Basic validation - check for counts matrix
     counts <- tryCatch({
-      GetAssayData(seurat_obj, slot = "counts")
+      get_assay_data_compat(seurat_obj, "counts")
     }, error = function(e) {
       error_msg <- sprintf("Failed to extract counts matrix from Seurat object: %s", conditionMessage(e))
       write_error_tsv(8, error_msg, error_output_file)
