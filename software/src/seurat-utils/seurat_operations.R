@@ -10,15 +10,16 @@ library(argparse)
 
 # Parse command line arguments
 parser <- ArgumentParser(description = "Unified script for Seurat RDS operations")
-parser$add_argument("operation", choices = c("extract-counts", "infer-species"), 
-                    help = "Operation to perform: extract-counts or infer-species")
+parser$add_argument("operation", choices = c("extract-counts", "infer-species", "check-input"), 
+                    help = "Operation to perform: extract-counts, infer-species, or check-input")
 parser$add_argument("--format", help = "Gene format (optional)", default = NULL)
 parser$add_argument("--rds", help = "Path to input Seurat RDS file (required for extract-counts)")
 parser$add_argument("--sample-name", help = "Sample name to filter (optional)", default = NULL)
 parser$add_argument("--sample-column-name", help = "Sample column name in metadata (required if --sample-name is provided)", default = NULL)
 parser$add_argument("--sample-id", help = "Sample ID to add to output (optional)", default = NULL)
 parser$add_argument("--output", help = "Path to output Parquet file (required for extract-counts)")
-parser$add_argument("input_file", nargs = "?", help = "Path to input Seurat RDS file (required for infer-species)")
+parser$add_argument("--error-output", help = "Path to error output TSV file (required for check-input)", default = "check_error.tsv")
+parser$add_argument("input_file", nargs = "?", help = "Path to input Seurat RDS file (required for infer-species and check-input)")
 
 args <- parser$parse_args()
 
@@ -412,12 +413,186 @@ operation_infer_species <- function() {
   })
 }
 
+# Operation: check-input
+operation_check_input <- function() {
+  input_file <- args$input_file
+  error_output_file <- args$error_output
+  
+  if (is.null(input_file)) {
+    stop("Error: input_file is required for check-input operation")
+  }
+  
+  # Function to write error to TSV file
+  write_error_tsv <- function(index, message, file_path) {
+    error_df <- data.frame(Index = as.character(index), Log = message, stringsAsFactors = FALSE)
+    write.table(error_df, file = file_path, sep = "\t", row.names = FALSE, quote = FALSE)
+  }
+  
+  # Function to estimate RDS file memory requirement
+  estimate_memory_needed <- function(file_path) {
+    file_size <- file.info(file_path)$size
+    estimated_memory <- file_size * 1.5
+    return(estimated_memory)
+  }
+  
+  # Function to get available memory using R's built-in functions
+  get_available_memory <- function() {
+    tryCatch({
+      # Get R's maximum vector allocation size (returns MB)
+      max_vsize_mb <- mem.maxVSize()
+      
+      cat(paste("Debug: mem.maxVSize() returned:", max_vsize_mb, "MB\n"), file = stderr())
+      
+      # Check if max_vsize is NA, Inf, or unreasonably large (unlimited)
+      # On many Unix systems it returns Inf (unlimited)
+      if (is.na(max_vsize_mb) || is.infinite(max_vsize_mb) || max_vsize_mb > 1e9) {
+        cat("Debug: max_vsize is NA, Inf, or too large (unlimited)\n", file = stderr())
+        return(NA)
+      }
+      
+      # Check if max_vsize is unreasonably small (less than 100MB)
+      if (max_vsize_mb < 100) {
+        cat(paste("Debug: max_vsize is too small (", max_vsize_mb, "MB), likely invalid\n"), file = stderr())
+        return(NA)
+      }
+      
+      # Convert to bytes
+      max_vsize_bytes <- max_vsize_mb * 1024^2
+      
+      # Get current memory usage by R
+      gc_info <- gc(reset = FALSE, full = TRUE)
+      # Sum of used memory (Ncells and Vcells in MB)
+      used_mb <- sum(gc_info[, "(Mb)"])
+      used_bytes <- used_mb * 1024^2
+      
+      cat(paste("Debug: Current R memory usage:", round(used_mb, 2), "MB\n"), file = stderr())
+      
+      # Available memory is max_vsize minus what's currently used
+      available_bytes <- max_vsize_bytes - used_bytes
+      
+      cat(paste("Debug: Calculated available memory:", round(available_bytes / 1024^2, 2), "MB\n"), file = stderr())
+      
+      # Return available bytes (conservative estimate)
+      # Return NA if the calculation doesn't make sense
+      if (available_bytes < 0) {
+        cat("Debug: Calculated available memory is negative\n", file = stderr())
+        return(NA)
+      }
+      
+      return(available_bytes)
+    }, error = function(e) {
+      cat(paste("Debug: Error in get_available_memory():", conditionMessage(e), "\n"), file = stderr())
+      # If we can't determine available memory, return NA
+      return(NA)
+    })
+  }
+  
+  tryCatch({
+    # Check if file exists
+    if (!file.exists(input_file)) {
+      write_error_tsv(1, paste("File not found:", input_file), error_output_file)
+      cat(paste("Error: File not found:", input_file, "\n"), file = stderr())
+      quit(status = 0)  # Exit successfully, error was written
+    }
+    
+    cat(paste("Checking Seurat RDS file:", input_file, "\n"), file = stderr())
+    
+    # Get file size
+    file_size <- file.info(input_file)$size
+    file_size_mb <- round(file_size / (1024^2), 2)
+    cat(paste("File size:", file_size_mb, "MB\n"), file = stderr())
+    
+    # Estimate memory needed
+    estimated_memory <- estimate_memory_needed(input_file)
+    estimated_memory_mb <- round(estimated_memory / (1024^2), 2)
+    cat(paste("Estimated memory needed:", estimated_memory_mb, "MB\n"), file = stderr())
+    
+    # Check available memory
+    available_memory <- get_available_memory()
+    if (!is.na(available_memory)) {
+      available_memory_mb <- round(available_memory / (1024^2), 2)
+      cat(paste("Available memory:", available_memory_mb, "MB\n"), file = stderr())
+      
+      # Check if we have enough memory (with 20% safety margin)
+      if (available_memory < estimated_memory * 1.2) {
+        error_msg <- sprintf("Possible memory issue: file requires ~%.2f MB, but only %.2f MB appears to be available. Loading may fail. Consider using a machine with more RAM if you encounter errors.", 
+                           estimated_memory_mb, available_memory_mb)
+        write_error_tsv(6, error_msg, error_output_file)
+        cat(paste("Warning:", error_msg, "\n"), file = stderr())
+        quit(status = 0)  # Exit successfully, warning was written
+      }
+    } else {
+      cat("Note: Could not determine available memory, proceeding with load attempt\n", file = stderr())
+    }
+    
+    # Try to read the RDS file
+    cat("Attempting to load RDS file...\n", file = stderr())
+    seurat_obj <- readRDS(input_file)
+    
+    # Check if it's a Seurat object
+    if (!inherits(seurat_obj, "Seurat")) {
+      write_error_tsv(7, "Input file is not a valid Seurat object. Please provide an RDS file containing a Seurat object.", error_output_file)
+      cat("Error: Input file is not a valid Seurat object\n", file = stderr())
+      quit(status = 0)  # Exit successfully, error was written
+    }
+    
+    # Basic validation - check for counts matrix
+    counts <- tryCatch({
+      GetAssayData(seurat_obj, slot = "counts")
+    }, error = function(e) {
+      error_msg <- sprintf("Failed to extract counts matrix from Seurat object: %s", conditionMessage(e))
+      write_error_tsv(8, error_msg, error_output_file)
+      cat(paste("Error:", error_msg, "\n"), file = stderr())
+      quit(status = 0)  # Exit successfully, error was written
+    })
+    
+    if (is.null(counts) || length(counts) == 0) {
+      write_error_tsv(8, "Seurat object does not contain a valid counts matrix. The 'counts' slot is empty or missing.", error_output_file)
+      cat("Error: Seurat object does not contain a valid counts matrix\n", file = stderr())
+      quit(status = 0)  # Exit successfully, error was written
+    }
+    
+    # Check for gene identifiers
+    gene_names <- rownames(counts)
+    if (is.null(gene_names) || length(gene_names) == 0) {
+      write_error_tsv(9, "No gene identifiers found in the counts matrix. Rows must have names (gene IDs).", error_output_file)
+      cat("Error: No gene identifiers found in the counts matrix\n", file = stderr())
+      quit(status = 0)  # Exit successfully, error was written
+    }
+    
+    # Check for cell identifiers
+    cell_names <- colnames(counts)
+    if (is.null(cell_names) || length(cell_names) == 0) {
+      write_error_tsv(10, "No cell identifiers found in the counts matrix. Columns must have names (cell barcodes).", error_output_file)
+      cat("Error: No cell identifiers found in the counts matrix\n", file = stderr())
+      quit(status = 0)  # Exit successfully, error was written
+    }
+    
+    # If we got here, everything is OK
+    cat(paste("Seurat object validated successfully:", nrow(counts), "genes ×", ncol(counts), "cells\n"), file = stderr())
+    cat("File format check passed\n", file = stderr())
+    
+    # Write empty error file (success)
+    write.table(data.frame(Index = character(0), Log = character(0)), 
+                file = error_output_file, sep = "\t", row.names = FALSE, quote = FALSE)
+    
+  }, error = function(e) {
+    # Catch any unexpected errors
+    error_msg <- paste("Error reading or validating Seurat file:", conditionMessage(e))
+    write_error_tsv(11, error_msg, error_output_file)
+    cat(paste(error_msg, "\n"), file = stderr())
+    quit(status = 0)  # Exit successfully, error was written
+  })
+}
+
 # Main execution
 tryCatch({
   if (args$operation == "extract-counts") {
     operation_extract_counts()
   } else if (args$operation == "infer-species") {
     operation_infer_species()
+  } else if (args$operation == "check-input") {
+    operation_check_input()
   } else {
     stop(paste("Unknown operation:", args$operation))
   }

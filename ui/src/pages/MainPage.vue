@@ -96,7 +96,7 @@ const errorLogs = useWatchFetch(() => app.model.outputs.errorLog, async (pframeH
         {{ errorLogs.value }}
       </PlAlert>
       <PlAlert v-if="app.model.outputs.runningPrerun" type="info" icon>
-        "Checking input files' format..."
+        Checking input files format...
       </PlAlert>
     </PlSlideModal>
     <PlAgDataTableV2 v-model="app.model.ui.tableState" :settings="tableSettings" show-export-button />

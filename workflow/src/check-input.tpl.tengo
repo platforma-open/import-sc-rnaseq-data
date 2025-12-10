@@ -14,11 +14,12 @@ self.defineOutputs("errorLog")
 self.body(func(inputs) {
 	inputData := inputs.input
 	inputSpec := inputs.inputSpec
+	importMode := inputs.importMode
 	// Set default conversion memory and CPU
 	defaultConvMem := "16GiB"
 	defaultConvCpu := 1
 
-	// CSV format: run the check (MTX format is skipped in prerun)
+	// Run check for CSV and Seurat formats (MTX format is skipped in prerun)
 	parsedData := pData.parseData(inputData, { expectedKeyLength: 1 })
 	sampleKeys := maps.getKeys(parsedData.data)
 
@@ -34,14 +35,31 @@ self.body(func(inputs) {
 	]
 
 	for sk in sampleKeys {
-		checkInputFileJob := exec.builder().
-			software(assets.importSoftware("@platforma-open/milaboratories.import-sc-rnaseq-data.software:check-format")).
-			mem("16GiB").
-			cpu(1).
-			addFile("rawCounts." + fileExtension, parsedData.data[sk]).
-			arg("rawCounts." + fileExtension).
-			saveFile("check_error.tsv").
-			run()
+		checkInputFileJob := undefined
+		
+		if importMode == "seurat" {
+			// Use R-based Seurat validation
+			checkInputFileJob = exec.builder().
+				software(assets.importSoftware("@platforma-open/milaboratories.import-sc-rnaseq-data.software:seurat-utils")).
+				mem("16GiB").
+				cpu(1).
+				addFile("input." + fileExtension, parsedData.data[sk]).
+				arg("check-input").
+				arg("input." + fileExtension).
+				arg("--error-output").arg("check_error.tsv").
+				saveFile("check_error.tsv").
+				run()
+		} else {
+			// Use Python-based CSV validation
+			checkInputFileJob = exec.builder().
+				software(assets.importSoftware("@platforma-open/milaboratories.import-sc-rnaseq-data.software:check-format")).
+				mem("16GiB").
+				cpu(1).
+				addFile("rawCounts." + fileExtension, parsedData.data[sk]).
+				arg("rawCounts." + fileExtension).
+				saveFile("check_error.tsv").
+				run()
+		}
 
 		dfsErrorLogs += [wf.frame(checkInputFileJob.getFile("check_error.tsv"), {xsvType: "tsv", schema: schemaErrorLogs})]
 	}
