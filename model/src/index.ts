@@ -43,7 +43,11 @@ export const model = BlockModel.create()
 
   .argsValid((ctx) => {
     const datasetRef = ctx.args.datasetRef;
-    return datasetRef !== undefined && datasetRef !== null;
+    if (datasetRef === undefined || datasetRef === null) {
+      return false;
+    }
+    // Check if validation passed (UI sets this based on prerun errorLog)
+    return ctx.uiState.allowRun;
   })
 
   .output('datasetOptions', (ctx) => {
