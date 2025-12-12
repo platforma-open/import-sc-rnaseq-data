@@ -125,9 +125,9 @@ class CountMatrixAnalyzer:
                     except (ValueError, TypeError):
                         # Not numeric and not in missing set - this will break scanpy
                         raise FileFormatError(
-                            f"6\tColumn '{col_name}' contains non-numeric string value '{val_str}' "
-                            f"that scanpy cannot handle. This input file doesn't look like a correctly formatted"
-                            f"count matrix. Please fix the file format and try again."
+                            f"6\tColumn '{col_name}' contains a non-numeric string value '{val_str}' "
+                            f"that scanpy cannot handle. The input file does not appear to be a correctly formatted "
+                            f"count matrix. Please check the file format and try again."
                         )
     
     def _determine_gene_orientation(self):
