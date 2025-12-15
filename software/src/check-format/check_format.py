@@ -42,6 +42,7 @@ class CountMatrixAnalyzer:
             List of gene identifiers
         """
         self._load_data()
+        self._check_column_types()
         self._determine_gene_orientation()
         return self.gene_identifiers
     
@@ -64,6 +65,70 @@ class CountMatrixAnalyzer:
                     self.df = pl.read_csv(self.file_path, separator='\t', has_header=True)
                 except Exception as e:
                     raise FileFormatError(f"2\tCould not read one of the provided files: {e}. File format different from CSV or TSV")
+    
+    def _check_column_types(self):
+        """
+        Check value types of loaded columns.
+        For non-numeric columns, check if values can be handled by scanpy.
+        Scanpy can handle: numeric strings, "NaN"/"NA"/"inf" (missing values).
+        Raise error if non-numeric column contains strings that scanpy cannot convert.
+        """
+        if self.df is None:
+            raise FileFormatError("3\tData not loaded")
+        
+        # Values that scanpy can handle even if they're strings
+        # These are missing value representations that pandas/scanpy recognizes
+        scanpy_handled_missing = {
+            "NaN", "nan", "NAN", "Na", "na",
+            "NA", "N/A", "n/a",
+            "inf", "Inf", "INF", "-inf", "-Inf", "-INF",
+            "infinity", "Infinity", "INFINITY",
+            "",  # Empty string is handled as missing
+        }
+
+        # Use tuple for faster membership testing (slightly more efficient than list)
+        numeric_types = (
+            pl.Int8, pl.Int16, pl.Int32, pl.Int64,
+            pl.UInt8, pl.UInt16, pl.UInt32, pl.UInt64,
+            pl.Float32, pl.Float64
+        )
+        
+        # Skip first column (typically gene/cell identifiers)
+        for col_name in self.df.columns[1:]:
+            col = self.df[col_name]
+            col_dtype = col.dtype
+            
+            # Check if column is numeric
+            if col_dtype not in numeric_types:
+                # Get first 10 distinct non-null values in one chain
+                distinct_values = (
+                    col.drop_nulls()
+                    .unique()
+                    .head(10)
+                    .to_list()
+                )
+                
+                # Check each value to see if scanpy can handle it
+                for val in distinct_values:
+                    # Convert to string for checking
+                    val_str = str(val).strip()
+                    
+                    # check scanpy-handled missing values first
+                    if val_str in scanpy_handled_missing:
+                        continue
+                    
+                    # Check if it's a numeric string (scanpy can convert)
+                    try:
+                        float(val_str)
+                        # If conversion succeeds, it's numeric - scanpy can handle it
+                        continue
+                    except (ValueError, TypeError):
+                        # Not numeric and not in missing set - this will break scanpy
+                        raise FileFormatError(
+                            f"6\tColumn '{col_name}' contains a non-numeric string value '{val_str}' "
+                            f"that scanpy cannot handle. The input file does not appear to be a correctly formatted "
+                            f"count matrix. Please check the file format and try again."
+                        )
     
     def _determine_gene_orientation(self):
         """Determine if genes are in rows or columns."""

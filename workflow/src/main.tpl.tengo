@@ -7,6 +7,9 @@ pframes := import("@platforma-sdk/workflow-tengo:pframes")
 processTpl := assets.importTemplate(":process")
 inferSpeciesTpl := assets.importTemplate(":infer-species")
 readInputTpl := assets.importTemplate(":read-input")
+preRunTpl := assets.importTemplate(":prerun")
+
+wf.setPreRun(preRunTpl)
 
 wf.body(func(args) {
 	blockId := wf.getBlockId()

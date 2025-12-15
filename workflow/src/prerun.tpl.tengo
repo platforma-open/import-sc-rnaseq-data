@@ -4,50 +4,37 @@ wf := import("@platforma-sdk/workflow-tengo:workflow")
 render := import("@platforma-sdk/workflow-tengo:render")
 assets := import("@platforma-sdk/workflow-tengo:assets")
 
+inputUtils := import(":libs.input-utils")
+
 checkFormatTpl := assets.importTemplate(":check-input")
 
-wf.body(func(args) {
-	importMode := string(args.importMode)
+wf.prepare(func(args) {
+	if args.datasetRef == undefined {
+		return {}
+	}
+	rawInput := wf.resolve(args.datasetRef, { errIfMissing: true })
+	return {
+		input: rawInput
+	}
+})
 
-	// Resolve the correct input based on import mode
-	input := undefined
-	if importMode == "csv" {
-		if args.datasetRef == undefined {
-			return {
-				outputs: {},
-				exports: {}
-			}
-		}
-		input = wf.resolve(args.datasetRef, { errIfMissing: true })
-	} else if importMode == "mtx" {
-		// Skip check for MTX format (not implemented yet)
-		// Return empty outputs - errorLog will be undefined and allowed by model
+
+wf.body(func(args) {
+	// Check if datasetRef is provided
+	if args.datasetRef == undefined {
 		return {
 			outputs: {},
 			exports: {}
 		}
-	} else if (importMode == "h5ad" || importMode == "h5ad-multi-sample") {
-		// Skip check for H5AD format (not implemented yet)
-		// Return empty outputs - errorLog will be undefined and allowed by model
-		return {
-			outputs: {},
-			exports: {}
-		}
-	} else if importMode == "h5" {
-		// Skip check for H5 format (not implemented yet)
-		// Return empty outputs - errorLog will be undefined and allowed by model
-		return {
-			outputs: {},
-			exports: {}
-		}
-	} else if (importMode == "seurat" || importMode == "seurat-multi-sample") {
-		// Skip check for Seurat format (not implemented yet)
-		// Return empty outputs - errorLog will be undefined and allowed by model
-		return {
-			outputs: {},
-			exports: {}
-		}
-	} else {
+	}
+	input := args.input
+	spec := input.spec
+
+	// Detect import mode from spec
+	importMode := inputUtils.detectImportMode(spec)
+
+	// Only run validation for CSV and Seurat formats, skip for all others
+	if importMode != "csv" && importMode != "seurat" {
 		return {
 			outputs: {},
 			exports: {}
@@ -55,8 +42,9 @@ wf.body(func(args) {
 	}
 
 	checkFormat := render.create(checkFormatTpl, {
-		input: input.getFutureInputField("data"),
-		inputSpec: input.getFutureInputField("spec")
+		input: input.data,
+		inputSpec: input.spec,
+		importMode: importMode
 	})
 
 	errorLog := checkFormat.output("errorLog")

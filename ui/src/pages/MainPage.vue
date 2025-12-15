@@ -37,8 +37,13 @@ const tableSettings = usePlDataTableSettingsV2({
 // Get error logs
 const errorLogs = useWatchFetch(() => app.model.outputs.errorLog, async (pframeHandle) => {
   if (!pframeHandle) {
-    // don't allow user to hit run right after changing dataset, wait for check-format to finish
-    app.model.ui.allowRun = false;
+    // If errorLog is undefined and prerun is not running, it means the format doesn't need validation
+    // (e.g., h5, h5ad, mtx), so allow run. Otherwise, wait for prerun to finish.
+    if (app.model.outputs.runningPrerun) {
+      app.model.ui.allowRun = false;
+    } else {
+      app.model.ui.allowRun = true;
+    }
     return undefined;
   }
   // Get ID of first pcolumn in the pframe (the only one we will access)
@@ -96,7 +101,7 @@ const errorLogs = useWatchFetch(() => app.model.outputs.errorLog, async (pframeH
         {{ errorLogs.value }}
       </PlAlert>
       <PlAlert v-if="app.model.outputs.runningPrerun" type="info" icon>
-        "Checking input files' format..."
+        Checking input files format...
       </PlAlert>
     </PlSlideModal>
     <PlAgDataTableV2 v-model="app.model.ui.tableState" :settings="tableSettings" show-export-button />

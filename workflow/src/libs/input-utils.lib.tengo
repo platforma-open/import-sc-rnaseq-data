@@ -3,6 +3,7 @@ json := import("json")
 smart := import("@platforma-sdk/workflow-tengo:smart")
 consts := import("@platforma-sdk/workflow-tengo:pframes.constants")
 pColumn := import("@platforma-sdk/workflow-tengo:pframes.pcolumn")
+ll := import("@platforma-sdk/workflow-tengo:ll")
 
 RTYPE_P_COLUMN_DATA_JSON := consts.RTYPE_P_COLUMN_DATA_JSON
 
@@ -78,6 +79,40 @@ createDatasetSpec := func(originalSpec, sampleIds, sampleIdAxis, fileExtension) 
 	return dsSpec
 }
 
+detectImportMode := func(spec) {
+	importMode := undefined
+	
+	// Check for MTX (has cellRangerFileRole axis)
+	if maps.containsKey(spec, "axesSpec") && spec.axesSpec != undefined {
+		for _, axis in spec.axesSpec {
+			if axis.name == "pl7.app/sc/cellRangerFileRole" {
+				importMode = "mtx"
+				break
+			}
+		}
+	}
+	
+	// Check for h5ad, h5, seurat, or csv based on file extension
+	if importMode == undefined && maps.containsKey(spec, "domain") && spec.domain != undefined {
+		fileExt := spec.domain["pl7.app/fileExtension"]
+		if fileExt == "h5ad" {
+			importMode = "h5ad"
+		} else if fileExt == "h5" {
+			importMode = "h5"
+		} else if fileExt == "rds" {
+			importMode = "seurat"
+		} else if fileExt == "csv" || fileExt == "csv.gz" || fileExt == "tsv" || fileExt == "tsv.gz" {
+			importMode = "csv"
+		}
+	}
+	
+	if importMode == undefined {
+		ll.panic("Could not infer import mode from dataset spec: %v", spec)
+	}
+	
+	return importMode
+}
+
 processMultiSample := func(bundle, importMode, fileExtension) {
 	dataset := bundle.getColumn("main")
 	linker := bundle.getColumns("linker")[0]
@@ -125,6 +160,7 @@ export {
 	parseSampleGroups: parseSampleGroups,
 	isMultiSample: isMultiSample,
 	createDatasetSpec: createDatasetSpec,
-	processMultiSample: processMultiSample
+	processMultiSample: processMultiSample,
+	detectImportMode: detectImportMode
 }
 
