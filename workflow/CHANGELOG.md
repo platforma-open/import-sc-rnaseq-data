@@ -1,5 +1,11 @@
 # @platforma-open/milaboratories.import-sc-rnaseq-data.workflow
 
+## 1.5.1
+
+### Patch Changes
+
+- 2974677: Add validation logic for Seurat input files
+
 ## 1.5.0
 
 ### Minor Changes
