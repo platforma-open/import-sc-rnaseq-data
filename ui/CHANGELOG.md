@@ -1,5 +1,11 @@
 # @platforma-open/milaboratories.import-sc-rnaseq-data.ui
 
+## 1.3.3
+
+### Patch Changes
+
+- 8d8bf74: Add validation of input seurat files
+
 ## 1.3.2
 
 ### Patch Changes

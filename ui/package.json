@@ -1,6 +1,6 @@
 {
   "name": "@platforma-open/milaboratories.import-sc-rnaseq-data.ui",
-  "version": "1.3.2",
+  "version": "1.3.3",
   "type": "module",
   "scripts": {
     "dev": "vite",

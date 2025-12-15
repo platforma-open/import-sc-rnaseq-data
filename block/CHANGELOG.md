@@ -1,5 +1,13 @@
 # @platforma-open/milaboratories.import-sc-rnaseq-data
 
+## 1.4.2
+
+### Patch Changes
+
+- Updated dependencies [8d8bf74]
+  - @platforma-open/milaboratories.import-sc-rnaseq-data.workflow@1.5.2
+  - @platforma-open/milaboratories.import-sc-rnaseq-data.ui@1.3.3
+
 ## 1.4.1
 
 ### Patch Changes
