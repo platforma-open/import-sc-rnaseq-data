@@ -1,5 +1,12 @@
 # @platforma-open/milaboratories.import-sc-rnaseq-data
 
+## 1.4.3
+
+### Patch Changes
+
+- 7ae30c2: Bump package-builder to 3.11.4
+- 3fb2594: Adds dash system dependency
+
 ## 1.4.2
 
 ### Patch Changes
