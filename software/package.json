@@ -1,6 +1,6 @@
 {
   "name": "@platforma-open/milaboratories.import-sc-rnaseq-data.software",
-  "version": "1.6.2",
+  "version": "1.6.3",
   "scripts": {
     "build": "pl-pkg build",
     "prepublishOnly": "pl-pkg prepublish",
