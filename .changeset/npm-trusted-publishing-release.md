@@ -1,9 +1,10 @@
 ---
-"@platforma-open/milaboratories.import-sc-rnaseq-data": minor
-"@platforma-open/milaboratories.import-sc-rnaseq-data.model": minor
-"@platforma-open/milaboratories.import-sc-rnaseq-data.software": minor
-"@platforma-open/milaboratories.import-sc-rnaseq-data.ui": minor
-"@platforma-open/milaboratories.import-sc-rnaseq-data.workflow": minor
+"@platforma-open/milaboratories.import-sc-rnaseq-data": patch
+"@platforma-open/milaboratories.import-sc-rnaseq-data.model": patch
+"@platforma-open/milaboratories.import-sc-rnaseq-data.software": patch
+"@platforma-open/milaboratories.import-sc-rnaseq-data.test": patch
+"@platforma-open/milaboratories.import-sc-rnaseq-data.ui": patch
+"@platforma-open/milaboratories.import-sc-rnaseq-data.workflow": patch
 ---
 
 Release every package through npm trusted publishing (OIDC) so each package's trusted publisher is used before it expires.
