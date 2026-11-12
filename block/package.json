@@ -29,7 +29,7 @@
     "meta": {
       "title": "Import scRNA-seq Data",
       "logo": "file:../logos/block-logo.png",
-      "url": "https://github.com/platforma-open/milaboratories.import-sc-rnaseq-data",
+      "url": "https://github.com/platforma-open/import-sc-rnaseq-data",
       "support": "mailto:support@milaboratories.com",
       "description": "Imports count matrices from CSV/TSV files for downstream scRNA-seq analysis.",
       "longDescription": "file:../docs/description.md",
